@@ -20,45 +20,62 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Check whether backend auto-deploy is configured
+        # The workflow only runs the actual deploy if both required secrets
+        # are set. If they aren't (e.g. project hasn't completed the Apps
+        # Script setup yet), the workflow exits cleanly with a notice
+        # instead of failing — so first-push commits show a green check
+        # rather than a red X. Set both secrets per DEPLOY.md to activate.
+        id: check
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ] || [ -z "$DEPLOYMENT_ID" ]; then
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "::notice::Backend auto-deploy skipped: clasp secrets are not configured yet. See DEPLOY.md → 'Wire up GitHub Actions' to enable. This is expected before the Apps Script project is set up."
+          else
+            echo "configured=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Check out the repo
+        if: steps.check.outputs.configured == 'true'
         uses: actions/checkout@v4
 
       - name: Set up Node.js
+        if: steps.check.outputs.configured == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install clasp
+        if: steps.check.outputs.configured == 'true'
         run: npm install -g @google/clasp@2.4.2
 
       - name: Restore clasp credentials
         # CLASPRC_JSON is the entire contents of ~/.clasprc.json from your
         # local machine after `clasp login`. See DEPLOY.md for how to set
         # this secret.
+        if: steps.check.outputs.configured == 'true'
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
         run: |
-          if [ -z "$CLASPRC_JSON" ]; then
-            echo "::error::CLASPRC_JSON secret is not set. Add it under repo Settings → Secrets and variables → Actions."
-            exit 1
-          fi
           printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
           chmod 600 ~/.clasprc.json
 
       - name: Verify clasp can see the project
+        if: steps.check.outputs.configured == 'true'
         run: clasp status
 
       - name: Push code to Apps Script
+        if: steps.check.outputs.configured == 'true'
         run: clasp push --force
 
       - name: Deploy (update existing deployment so URL stays the same)
+        if: steps.check.outputs.configured == 'true'
         env:
           DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
         run: |
-          if [ -z "$DEPLOYMENT_ID" ]; then
-            echo "::error::APPS_SCRIPT_DEPLOYMENT_ID secret is not set. See DEPLOY.md."
-            exit 1
-          fi
           clasp deploy \
             --deploymentId "$DEPLOYMENT_ID" \
             --description "GHA $(date -u +%Y-%m-%dT%H:%MZ) ${GITHUB_SHA::7}"
