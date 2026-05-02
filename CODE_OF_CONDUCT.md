@@ -8,7 +8,7 @@ The full text of the Covenant lives at the link above. By participating in this 
 
 A few things worth saying explicitly for this project:
 
-- **Respect for upstream work is non-negotiable.** This corpus stands on top of work done by the maintainers and volunteers of Project Madurai, Tamil Virtual Academy, the Sangam Translations site, the PaaPeyarchi dataset, and many earlier resources. Public commentary about those projects in issues, PRs, or discussions should be respectful and additive — describe what each one is for, not what it lacks.
+- **Respect for upstream work is non-negotiable.** This corpus stands on top of work done by the maintainers and volunteers of Project Madurai, Tamil Virtual Academy, the Sangam Translations site, the PaaPeyarchi dataset, and many earlier resources. Public commentary about those projects in issues, PRs, or discussions should be respectful and additive.
 - **Disagreements about literary interpretation are welcome.** The interpretive layer (rasa, dhvani, thinai, ullurai) involves real scholarly judgment, and reasonable annotators can disagree. Disagreements are best handled in writing, with sources cited.
 - **Disagreements about a person's reading of a verse should never become disagreements about that person.**
 
