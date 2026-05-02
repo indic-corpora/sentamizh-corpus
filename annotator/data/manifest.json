@@ -1,0 +1,85 @@
+{
+  "texts": [
+    {
+      "id": "purananuru",
+      "name_en": "Purananuru",
+      "name_ta": "புறநானூறு",
+      "layer": "Sangam (Puram)",
+      "akam_or_puram": "Puram",
+      "file": "Purananuru.json",
+      "count": 388
+    },
+    {
+      "id": "akananuru",
+      "name_en": "Akananuru",
+      "name_ta": "அகநானூறு",
+      "layer": "Sangam (Akam)",
+      "akam_or_puram": "Akam",
+      "file": "Akananuru.json",
+      "count": 400
+    },
+    {
+      "id": "kuruntokai",
+      "name_en": "Kuruntokai",
+      "name_ta": "குறுந்தொகை",
+      "layer": "Sangam (Akam)",
+      "akam_or_puram": "Akam",
+      "file": "Kuruntokai.json",
+      "count": 400
+    },
+    {
+      "id": "natrinai",
+      "name_en": "Natrinai",
+      "name_ta": "நற்றிணை",
+      "layer": "Sangam (Akam)",
+      "akam_or_puram": "Akam",
+      "file": "Natrinai.json",
+      "count": 396
+    },
+    {
+      "id": "thevaram",
+      "name_en": "Thevaram",
+      "name_ta": "தேவாரம்",
+      "layer": "Bhakti",
+      "akam_or_puram": null,
+      "file": "Thevaram.json",
+      "count": 4043
+    },
+    {
+      "id": "divya_prabandham",
+      "name_en": "Divya Prabandham",
+      "name_ta": "திவ்ய பிரபந்தம்",
+      "layer": "Bhakti",
+      "akam_or_puram": null,
+      "file": "Divya_Prabandham.json",
+      "count": 3928
+    },
+    {
+      "id": "silappatikaram",
+      "name_en": "Silappatikaram",
+      "name_ta": "சிலப்பதிகாரம்",
+      "layer": "Epic",
+      "akam_or_puram": null,
+      "file": "Silappatikaram.json",
+      "count": 10
+    },
+    {
+      "id": "manimekalai",
+      "name_en": "Manimekalai",
+      "name_ta": "மணிமேகலை",
+      "layer": "Epic",
+      "akam_or_puram": null,
+      "file": "Manimekalai.json",
+      "count": 493
+    },
+    {
+      "id": "thirumanthiram",
+      "name_en": "Thirumanthiram",
+      "name_ta": "திருமந்திரம்",
+      "layer": "Spiritual",
+      "akam_or_puram": null,
+      "file": "Thirumanthiram.json",
+      "count": 335
+    }
+  ]
+}

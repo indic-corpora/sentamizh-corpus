@@ -1,0 +1,70 @@
+# macOS
+.DS_Store
+._*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Workspace probes used during sandbox development
+.test_write
+
+# Local secrets (never check in API keys)
+.env
+.env.local
+*.key
+secrets.json
+
+# Build / distribution artifacts
+build/
+dist/
+*.egg-info/
+
+# Intermediate extraction artifacts (canonical files live alongside)
+data/processed/_intermediates/
+
+# Third-party source data — not redistributed.
+# Reproducible by running scripts/download_*.py against the source URLs
+# documented in the README's "Source Data" section.
+data/raw/
+data/external/
+
+# Generated exports — derived from data/processed/, regenerable via
+# scripts/export_markdown.py. No need to version derived artifacts.
+exports/
+
+# Local-only historical artifacts. Preserved on disk for reference;
+# not part of the public repo.
+archive/
+
+# Annotator deploys: the corpus JSONs in annotator/data/ are copied at
+# build time by scripts/build_annotator_data.py (see netlify.toml).
+# Only the manifest is kept in git — it's the only annotator-specific file.
+annotator/data/*.json
+!annotator/data/manifest.json
+
+# Annotator local development scratch
+annotator/.netlify/
+annotator/.env
+
+# Deployment helpers — never commit credentials or local-only IDs
+.clasprc.json
+.clasp-deployment-id
+.netlify/
+

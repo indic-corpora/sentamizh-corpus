@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sentamizh Corpus Entry",
+  "description": "Schema for a single annotated verse in the Sentamizh Corpus — a multi-framework Classical Tamil literary dataset. The schema has 32 fields organized in four content layers plus annotation metadata: Core (identification and raw text, designed for Classical Tamil + Modern Tamil + English representation), Tamil-native Interpretive (Tolkappiyam-aligned categories), Interpretive (themes, philosophy, storytelling seeds), and Cross-Cultural Bridge (annotations legible to readers without classical-Tamil background). Per-language and per-field coverage in the actual corpus is partial; see the dataset card for current state.",
+  "type": "object",
+  "required": [
+    "verse_id",
+    "source_text",
+    "layer",
+    "verse_number",
+    "classical_tamil"
+  ],
+  "properties": {
+
+    "_comment_core": {
+      "const": "=== CORE LAYER: Identification & Text ==="
+    },
+
+    "verse_id": {
+      "type": "string",
+      "description": "Unique identifier, e.g. PURN-001, AKAM-042, DIVA-100",
+      "pattern": "^[A-Z]{3,4}-\\d{3,4}$"
+    },
+    "source_text": {
+      "type": "string",
+      "description": "Title of the source work. 'Thevaram' (Thirumurai 1-7) and 'Thirumanthiram' (Thirumurai 10) are recorded distinctly because they belong to different corpus layers (Bhakti vs Spiritual) and have separate verse-id namespaces.",
+      "enum": [
+        "Purananuru",
+        "Akananuru",
+        "Kuruntokai",
+        "Natrinai",
+        "Divya Prabandham",
+        "Thirumurai",
+        "Thevaram",
+        "Thirumanthiram",
+        "Silappatikaram",
+        "Manimekalai",
+        "Naladiyar",
+        "Pazhamozhi",
+        "Deivathin Kural",
+        "Yaeni Padigal Manthirankal"
+      ]
+    },
+    "layer": {
+      "type": "string",
+      "description": "Corpus layer classification",
+      "enum": ["Sangam", "Bhakti", "Epic", "Didactic", "Spiritual"]
+    },
+    "period": {
+      "type": "string",
+      "description": "Approximate date range, e.g. '300 BCE – 300 CE'"
+    },
+    "verse_number": {
+      "type": "string",
+      "description": "Original numbering in source text"
+    },
+    "classical_tamil": {
+      "type": "string",
+      "description": "Original verse in Classical Tamil (Centamil)",
+      "minLength": 1
+    },
+    "modern_tamil": {
+      "type": ["string", "null"],
+      "description": "Paraphrase in Modern Tamil — annotated by native speaker"
+    },
+    "english": {
+      "type": ["string", "null"],
+      "description": "English translation or close rendering"
+    },
+    "source_url": {
+      "type": ["string", "null"],
+      "description": "Digital source URL (Project Madurai, Tamil Virtual Academy)"
+    },
+    "difficulty": {
+      "type": ["string", "null"],
+      "description": "Linguistic accessibility level",
+      "enum": ["archaic", "classical", "accessible", null]
+    },
+
+    "_comment_tamil_native": {
+      "const": "=== TAMIL-NATIVE INTERPRETIVE LAYER: Tolkappiyam & Classical Tamil Poetics ==="
+    },
+
+    "thinai": {
+      "type": ["string", "null"],
+      "description": "Sangam ecological landscape-mode (Akam poems only). From Tolkappiyam Porulatikaram. Each thinai encodes an emotional situation through landscape: Kurinji (mountains) — union; Mullai (forests) — patient waiting; Marutham (farmland) — domestic discord; Neytal (coast) — separation and longing; Palai (wasteland) — hardship and travel. Kaikkilai and Peruntinai are extensions outside the principal five.",
+      "enum": [
+        "Kurinji",
+        "Mullai",
+        "Marutham",
+        "Neytal",
+        "Palai",
+        "Kaikkilai",
+        "Peruntinai",
+        null
+      ]
+    },
+    "turai": {
+      "type": ["string", "null"],
+      "description": "Sub-genre classification within tinai — the specific dramatic scenario. From Tolkappiyam Porulatikaram. Stored in Tamil (e.g., 'செவியறிவுறூஉ', 'வாகைத்துறை'). Extractable from Sangam source texts."
+    },
+    "akam_or_puram": {
+      "type": ["string", "null"],
+      "description": "Interior (love) or exterior (heroic) mode — Sangam texts only",
+      "enum": ["Akam", "Puram", null]
+    },
+    "karu": {
+      "type": ["array", "null"],
+      "description": "Native/natural elements present in the verse per Tolkappiyam — deity, fauna, flora, food, music/instruments, occupations, places specific to the landscape. The poem's concrete sensory world.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "uri": {
+      "type": ["string", "null"],
+      "description": "The essential human emotional/psychological activity of the poem — what the poem is 'doing' emotionally. From Tolkappiyam Porulatikaram. Uri is the 'soul' of akam poetry."
+    },
+    "ullurai": {
+      "type": ["string", "null"],
+      "description": "Metaphorical correlation — how landscape and nature elements in the verse map to human emotional states. The implicit comparison that gives Sangam Akam poetry much of its characteristic depth. From Tolkappiyam. Other classical traditions (Persian ghazal, Japanese tanka, classical Chinese imagistic poetry) work with related principles in different forms; ullurai is the explicit Tolkappiyam framing of this correspondence."
+    },
+    "speaker_role": {
+      "type": ["string", "null"],
+      "description": "Who is speaking in the poem. Sangam Akam roles (talaivan/talaivi/tozi/tolan/sevili/cevilittay/parattai/virali/etc.) come from Tolkappiyam and Iraiyanar Akapporul and capture the dramatic monologue framework that organizes Akam poetry. Other layers reuse the field with their own conventions: 'devotee' / 'deity' for Bhakti, 'narrator' for Epic, 'bard' for Sangam Puram. Speaker identity sets the verse's register and stakes.",
+      "enum": [
+        "talaivan",
+        "talaivi",
+        "tozi",
+        "tolan",
+        "sevili",
+        "panan",
+        "cevilittay",
+        "kantor",
+        "parattai",
+        "virali",
+        "passerby",
+        "bard",
+        "devotee",
+        "narrator",
+        "deity",
+        "other",
+        null
+      ]
+    },
+    "metre": {
+      "type": ["string", "null"],
+      "description": "Prosodic form of the verse. From Tamil prosodic tradition (Tolkappiyam, Yapparungalam).",
+      "enum": [
+        "venba",
+        "aciriyappa",
+        "kalippa",
+        "vanjippa",
+        "maruthipa",
+        "viruttam",
+        "other",
+        null
+      ]
+    },
+    "pann": {
+      "type": ["string", "null"],
+      "description": "Traditional Tamil melodic mode, where known. Primarily applicable to the Bhakti layer (Thirumurai, Divya Prabandham), where verses were composed for performance in specific panns. From Tamil musical tradition."
+    },
+    "dhvani_layer": {
+      "type": ["string", "null"],
+      "description": "Implied/suggested meaning beneath the surface text. Sanskrit aesthetic concept (Anandavardhana's Dhvanyaloka) applicable across all layers."
+    },
+
+    "_comment_interpretive": {
+      "const": "=== INTERPRETIVE LAYER: Thematic & Contextual Annotation ==="
+    },
+
+    "rasa_primary": {
+      "type": ["string", "null"],
+      "description": "Dominant rasa from the Navarasa framework (Bharata's Natyashastra). Nine rasas total; Shanta (peace) is sometimes treated in the literature as a later addition to the original eight.",
+      "enum": [
+        "Shringara",
+        "Hasya",
+        "Karuna",
+        "Raudra",
+        "Veera",
+        "Bhayanak",
+        "Bibhatsa",
+        "Adbhuta",
+        "Shanta",
+        null
+      ]
+    },
+    "rasa_secondary": {
+      "type": ["array", "null"],
+      "description": "Supporting rasas accompanying rasa_primary. Verses naturally combine rasas — for instance, a Sangam Akam verse may be primarily Shringara (love) with a Karuna (compassion/sorrow) undercurrent.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "Shringara",
+          "Hasya",
+          "Karuna",
+          "Raudra",
+          "Veera",
+          "Bhayanak",
+          "Bibhatsa",
+          "Adbhuta",
+          "Shanta"
+        ]
+      }
+    },
+    "themes": {
+      "type": ["array", "null"],
+      "description": "Thematic tags, e.g. love, valor, devotion, nature, grief, dharma",
+      "items": {
+        "type": "string"
+      }
+    },
+    "philosophical_concept": {
+      "type": ["string", "null"],
+      "description": "e.g. Anbu, Aram, Bhakti, Maya, Ahimsa"
+    },
+    "cultural_context": {
+      "type": ["string", "null"],
+      "description": "Author, poet name, patron, period significance, literary tradition"
+    },
+    "storytelling_seed_narrative": {
+      "type": ["string", "null"],
+      "description": "Plot-based seed for Epic/Bhakti layer — character tension, moral dilemma, divine relationship, or dramatic episode"
+    },
+    "storytelling_seed_emotional": {
+      "type": ["string", "null"],
+      "description": "Emotion/image-based seed for Sangam layer — feeling, landscape, and implied situation without imposing plot"
+    },
+
+    "_comment_crosscultural": {
+      "const": "=== CROSS-CULTURAL BRIDGE LAYER: Universally Legible Annotations ==="
+    },
+
+    "nayika_bheda": {
+      "type": ["string", "null"],
+      "description": "Which of the 8 classical heroine states (Ashta Nayika from Natyashastra/Abhinaya Darpana) this verse maps to. Pan-Indian interpretive layer used in Bharatanatyam, Odissi, miniature painting, and other classical arts. Not native to Tamil but widely recognized.",
+      "enum": [
+        "vasakasajja",
+        "virahotkanthita",
+        "svadhinabhartruka",
+        "kalahantarita",
+        "khandita",
+        "vipralabdha",
+        "proshitabhartruka",
+        "abhisarika",
+        null
+      ]
+    },
+    "visual_imagery": {
+      "type": ["array", "null"],
+      "description": "Concrete visual images evoked, in universally understandable terms. Complements karu (Tamil literary terms) with descriptions accessible to non-Tamil speakers. E.g., 'war drums at dawn', 'jasmine garland wilting', 'chariot tracks in sand'.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "emotional_valence": {
+      "type": ["object", "null"],
+      "description": "Cross-cultural emotional dimensions, modelled on Plutchik's Wheel of Emotions (Plutchik, 1980) — one of the widely-cited general-purpose emotion taxonomies, alongside Ekman's basic emotions and Russell's circumplex. Provided in parallel with rasa_primary so consumers can query whichever vocabulary suits their work; the corpus does not commit to either being the 'correct' emotional taxonomy. Plutchik was chosen for this slot because its primary/intensity/dyad structure maps cleanly to a JSON object.",
+      "properties": {
+        "primary": {
+          "type": "string",
+          "description": "Primary emotion from Plutchik's 8 basic emotions",
+          "enum": ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation"]
+        },
+        "intensity": {
+          "type": "string",
+          "description": "Emotional intensity level",
+          "enum": ["low", "medium", "high"]
+        },
+        "secondary": {
+          "type": ["string", "null"],
+          "description": "Optional secondary emotion (Plutchik dyad)",
+          "enum": ["joy", "trust", "fear", "surprise", "sadness", "disgust", "anger", "anticipation", null]
+        }
+      },
+      "required": ["primary", "intensity"]
+    },
+
+    "_comment_meta": {
+      "const": "=== META: Annotation Provenance ==="
+    },
+
+    "annotator": {
+      "type": ["string", "null"],
+      "description": "Name of human annotator"
+    },
+    "annotation_confidence": {
+      "type": ["string", "null"],
+      "description": "Confidence level of human annotation",
+      "enum": ["high", "medium", "low", null]
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,9 @@
+# clasp pushes everything inside rootDir (annotator/) by default. We only
+# want the backend script and the manifest pushed to Apps Script — the
+# frontend HTML, the verse JSONs, the Apps Script setup notes, etc. should
+# stay local.
+
+**
+
+!google_apps_script.gs
+!appsscript.json

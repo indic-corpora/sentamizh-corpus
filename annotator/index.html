@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=2.0">
+<meta name="theme-color" content="#7c2d12">
+<title>செந்தமிழ் — Sentamizh Annotator</title>
+<style>
+  :root {
+    --ink: #1f1611;
+    --paper: #fdfaf6;
+    --accent: #7c2d12;
+    --accent-soft: #fff7ed;
+    --muted: #78716c;
+    --border: #e7e2dd;
+    --green: #15803d;
+    --warn: #ea580c;
+    --danger: #dc2626;
+    --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, "Latha", "Nirmala UI", system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 17px;
+    line-height: 1.55;
+    -webkit-text-size-adjust: 100%;
+  }
+  body { padding-bottom: env(safe-area-inset-bottom, 0); }
+  button { font-family: inherit; cursor: pointer; }
+  textarea, input { font-family: inherit; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: var(--accent); color: white;
+    padding: 12px 16px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .topbar-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .topbar h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .topbar .progress-text { font-size: 13px; opacity: 0.95; }
+  .progress-bar { height: 4px; background: rgba(255,255,255,0.25); margin-top: 8px; border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: white; transition: width 0.3s; width: 0%; }
+  .topbar-menu {
+    background: transparent; border: 1px solid rgba(255,255,255,0.4);
+    color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px;
+  }
+
+  .corpus-list { padding: 16px; max-width: 600px; margin: 0 auto; }
+  .corpus-list h2 { margin-top: 8px; font-weight: 600; font-size: 22px; }
+  .corpus-list p { color: var(--muted); margin-top: 0; }
+  .corpus-card {
+    display: block; padding: 16px; margin-bottom: 12px;
+    background: white; border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow); text-decoration: none; color: var(--ink);
+  }
+  .corpus-card-name { font-size: 22px; font-weight: 600; }
+  .corpus-card-name-en { font-size: 14px; color: var(--muted); margin-left: 6px; }
+  .corpus-card-meta { display: flex; gap: 12px; margin-top: 6px; font-size: 13px; color: var(--muted); }
+  .corpus-card-progress { font-weight: 500; color: var(--accent); }
+  .corpus-progress-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+  .corpus-progress-fill { height: 100%; background: var(--green); }
+
+  .container { max-width: 600px; margin: 0 auto; padding: 16px; }
+  .verse-id { font-size: 12px; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; }
+  .pre-extracted {
+    background: var(--accent-soft);
+    border: 1px solid #fed7aa;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin: 12px 0;
+    font-size: 14px;
+  }
+  .pre-extracted .label { color: var(--accent); font-weight: 600; margin-right: 6px; }
+  .pre-extracted div { margin-bottom: 4px; }
+  .pre-extracted div:last-child { margin-bottom: 0; }
+
+  .ref-card {
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin: 12px 0;
+    font-size: 13px;
+    color: #064e3b;
+    line-height: 1.55;
+  }
+  .ref-card .ref-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.4px;
+    color: #047857; display: block; margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+  .ref-card.empty { background: #f8f8f5; border-color: var(--border); color: var(--muted); }
+  .ref-card.empty .ref-label { color: var(--muted); }
+
+  .verse-text {
+    font-size: 22px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin: 16px 0;
+    box-shadow: var(--shadow);
+    color: #2a1f15;
+    word-break: break-word;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  .field {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+  }
+  .field-label {
+    font-weight: 600; font-size: 16px; margin-bottom: 4px;
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .field-label-en { font-weight: 400; font-size: 12px; color: var(--muted); }
+  .field-help { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+
+  textarea, input[type=text] {
+    width: 100%; padding: 12px;
+    font-size: 17px; line-height: 1.5;
+    border: 1.5px solid var(--border); border-radius: 8px;
+    background: #fcfaf7;
+    resize: vertical; min-height: 80px;
+  }
+  textarea:focus, input[type=text]:focus { outline: none; border-color: var(--accent); background: white; }
+
+  .text-row { display: flex; gap: 8px; align-items: flex-start; }
+  .text-row > textarea, .text-row > input { flex: 1; }
+  .mic-btn {
+    width: 52px; height: 52px;
+    border: none; border-radius: 50%;
+    background: var(--accent); color: white;
+    font-size: 22px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow);
+    transition: transform 0.1s, background 0.2s;
+  }
+  .mic-btn:active { transform: scale(0.94); }
+  .mic-btn.recording {
+    background: var(--danger);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.5); }
+    50%     { box-shadow: 0 0 0 12px rgba(220,38,38,0); }
+  }
+  .mic-btn:disabled { background: #ccc; cursor: not-allowed; }
+  .mic-status { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 16px; }
+  .mic-status.error { color: var(--danger); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    padding: 10px 14px;
+    border: 1.5px solid var(--border);
+    background: white;
+    border-radius: 8px;
+    font-size: 15px;
+    color: var(--ink);
+  }
+  .chip:active { transform: scale(0.97); }
+  .chip.selected {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+    font-weight: 500;
+  }
+  .chip-en { font-size: 11px; opacity: 0.7; margin-left: 4px; font-weight: 400; }
+
+  .skip-btn {
+    background: none; border: 1px dashed var(--muted); color: var(--muted);
+    padding: 8px 14px; border-radius: 8px; font-size: 14px;
+    margin-top: 8px;
+  }
+
+  .section-h {
+    margin: 24px 0 12px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--accent);
+    padding-bottom: 4px;
+    border-bottom: 2px solid var(--accent-soft);
+  }
+  .section-h-ta { font-size: 16px; text-transform: none; letter-spacing: 0; }
+
+  .nav {
+    position: sticky; bottom: 0;
+    background: var(--paper);
+    border-top: 1px solid var(--border);
+    padding: 12px 16px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex; gap: 10px;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+  }
+  .nav-btn {
+    flex: 1; padding: 14px; font-size: 16px; font-weight: 600;
+    border: none; border-radius: 10px;
+    background: white; border: 1.5px solid var(--border); color: var(--ink);
+  }
+  .nav-btn.primary { background: var(--accent); color: white; border-color: var(--accent); flex: 2; }
+  .nav-btn:disabled { opacity: 0.4; }
+
+  .save-toast {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    background: var(--green); color: white;
+    padding: 10px 20px; border-radius: 30px;
+    font-size: 13px; box-shadow: var(--shadow);
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    z-index: 100;
+  }
+  .save-toast.show { opacity: 0.94; }
+
+  .config-warning {
+    background: #fef3c7; border: 1px solid #fbbf24;
+    padding: 10px 14px; border-radius: 8px; font-size: 13px;
+    color: #78350f; margin: 10px 0;
+  }
+
+  details { margin-top: 8px; }
+  details summary { font-size: 13px; color: var(--muted); cursor: pointer; padding: 4px 0; }
+  details[open] summary { margin-bottom: 8px; }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+
+  /* Selection-based dictionary popup */
+  .lookup-pill {
+    /* absolute (not fixed) so it stays anchored to the verse if the user
+       scrolls between selecting and tapping. The JS top calculation adds
+       window.scrollY, which only makes sense in absolute coordinates. */
+    position: absolute; z-index: 200;
+    background: var(--accent); color: white;
+    padding: 10px 16px; border-radius: 30px;
+    font-size: 15px; font-weight: 500;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+    border: none;
+  }
+  .dict-popover {
+    position: absolute; z-index: 199;
+    background: white;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    max-width: min(380px, 92vw);
+    font-size: 15px;
+  }
+  .dict-popover-close {
+    background: none; border: none; color: var(--muted);
+    font-size: 18px; padding: 0 4px; cursor: pointer; float: right;
+  }
+  .dict-popover-word { font-size: 19px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+  .dict-popover-source {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.4px;
+    color: var(--accent); text-transform: uppercase; margin-bottom: 8px;
+  }
+  .dict-popover-def {
+    font-size: 14px; line-height: 1.55; color: var(--ink);
+    margin-bottom: 6px;
+  }
+  .dict-popover-empty { font-size: 14px; color: var(--muted); font-style: italic; }
+  .dict-popover-attrib {
+    font-size: 11px; color: var(--muted); margin-top: 8px;
+    border-top: 0.5px solid var(--border); padding-top: 6px;
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-row">
+      <h1 id="topbar-title">செந்தமிழ் — Sentamizh</h1>
+      <button class="topbar-menu" onclick="goHome()">📚 மாற்று</button>
+    </div>
+    <div class="progress-text" id="progress-text"></div>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+  </div>
+  <div id="content"></div>
+</div>
+
+<div class="save-toast" id="save-toast">✓ சேமிக்கப்பட்டது</div>
+
+<script type="module">
+  // Soniox Web SDK — direct WebSocket streaming from browser to Soniox.
+  // Apps Script is only used for short-lived API key minting; audio never
+  // touches our backend.
+  import { SonioxClient } from 'https://esm.sh/@soniox/speech-to-text-web@1';
+  window.SonioxClient = SonioxClient;
+  window.dispatchEvent(new Event('soniox-ready'));
+</script>
+
+<script>
+// ─── Configuration ────────────────────────────────────────────────────────
+const CONFIG = {
+  // Paste your Apps Script Web App URL here after deployment. See SETUP.md.
+  APPS_SCRIPT_URL: '',
+  ANNOTATOR_NAME: 'Amma',
+  // Soniox real-time model. v4 is the current production model and supports
+  // Tamil. The old `stt-rt-preview` was retired 2025-11-30.
+  STT_MODEL: 'stt-rt-v4',
+};
+
+// ─── Schema enums (chip-style fields) ─────────────────────────────────────
+const ENUMS = {
+  thinai: [
+    {v:'Kurinji', ta:'குறிஞ்சி'}, {v:'Mullai', ta:'முல்லை'},
+    {v:'Marutham', ta:'மருதம்'}, {v:'Neytal', ta:'நெய்தல்'},
+    {v:'Palai', ta:'பாலை'}, {v:'Kaikkilai', ta:'கைக்கிளை'},
+    {v:'Peruntinai', ta:'பெருந்திணை'},
+  ],
+  akam_or_puram: [{v:'Akam', ta:'அகம்'}, {v:'Puram', ta:'புறம்'}],
+  speaker_role: [
+    {v:'talaivan', ta:'தலைவன்'}, {v:'talaivi', ta:'தலைவி'},
+    {v:'tozi', ta:'தோழி'}, {v:'tolan', ta:'தோழன்'},
+    {v:'sevili', ta:'செவிலி'}, {v:'panan', ta:'பாணன்'},
+    {v:'cevilittay', ta:'செவிலித்தாய்'}, {v:'kantor', ta:'கண்டோர்'},
+    {v:'parattai', ta:'பரத்தை'}, {v:'virali', ta:'விறலி'},
+    {v:'passerby', ta:'வழிப்போக்கன்'}, {v:'bard', ta:'பாடகர்'},
+    {v:'devotee', ta:'பக்தர்'}, {v:'narrator', ta:'கதைசொல்லி'},
+    {v:'deity', ta:'கடவுள்'}, {v:'other', ta:'மற்றவர்'},
+  ],
+  metre: ['venba', 'aciriyappa', 'kalippa', 'vanjippa', 'maruthipa', 'viruttam', 'other'],
+  rasa: [
+    {v:'Shringara', en:'romance'}, {v:'Hasya', en:'humor'}, {v:'Karuna', en:'sorrow'},
+    {v:'Raudra', en:'fury'}, {v:'Veera', en:'valor'}, {v:'Bhayanak', en:'fear'},
+    {v:'Bibhatsa', en:'disgust'}, {v:'Adbhuta', en:'wonder'}, {v:'Shanta', en:'peace'},
+  ],
+  nayika_bheda: [
+    'vasakasajja','virahotkanthita','svadhinabhartruka','kalahantarita',
+    'khandita','vipralabdha','proshitabhartruka','abhisarika',
+  ],
+  plutchik: ['joy','trust','fear','surprise','sadness','disgust','anger','anticipation'],
+  intensity: ['low','medium','high'],
+  confidence: [
+    {v:'high', ta:'நிச்சயமாக'}, {v:'medium', ta:'சாத்தியமாக'}, {v:'low', ta:'ஒருவேளை'},
+  ],
+};
+
+// ─── State ────────────────────────────────────────────────────────────────
+const state = {
+  manifest: null,
+  currentText: null,
+  verses: [],
+  index: 0,
+  annotation: null,
+  saveTimer: null,
+  sonioxClient: null,           // Active SonioxClient instance, if recording
+  sonioxBoundField: null,       // {targetEl, statusEl, btnEl, baseText} during a recording
+  sessionId: 'sess-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now(),
+};
+
+// ─── localStorage helpers ─────────────────────────────────────────────────
+const LS_KEY = 'sentamizh_annot_v2';
+function loadLocal() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); }
+  catch { return {}; }
+}
+function saveLocal(d) { localStorage.setItem(LS_KEY, JSON.stringify(d)); }
+function getProgress(textId) {
+  const all = loadLocal();
+  return all[textId] || { lastIndex: 0, byId: {} };
+}
+function setProgress(textId, prog) {
+  const all = loadLocal();
+  all[textId] = prog;
+  saveLocal(all);
+}
+
+// ─── Apps Script API (proxy contract) ─────────────────────────────────────
+async function postAction(payload) {
+  if (!CONFIG.APPS_SCRIPT_URL) return { ok: false, reason: 'no_url' };
+  try {
+    const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return { ok: true, data: await res.json() };
+  } catch (err) {
+    return { ok: false, reason: String(err) };
+  }
+}
+
+async function fetchAnnotations(textId) {
+  if (!CONFIG.APPS_SCRIPT_URL) return {};
+  try {
+    const url = CONFIG.APPS_SCRIPT_URL + '?text=' + encodeURIComponent(textId);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  } catch (err) {
+    console.warn('fetchAnnotations failed:', err);
+    return {};
+  }
+}
+
+async function pushAnnotation(annot) {
+  return postAction(annot);
+}
+
+async function getSttToken() {
+  return postAction({
+    action: 'transcribe-token',
+    expires_in_seconds: 600,
+    session_id: state.sessionId,
+  });
+}
+
+const lookupCache = new Map();
+async function lookupWord(text) {
+  if (lookupCache.has(text)) return { ok: true, data: lookupCache.get(text), cached: true };
+  const result = await postAction({ action: 'lookup', text });
+  if (result.ok) lookupCache.set(text, result.data);
+  return result;
+}
+
+// Fire-and-forget telemetry. Never blocks the user.
+function logTelemetry(row) {
+  if (!CONFIG.APPS_SCRIPT_URL) return;
+  const payload = Object.assign({
+    action: 'log',
+    session_id: state.sessionId,
+    verse_id: state.verses[state.index]?.verse_id || '',
+  }, row);
+  fetch(CONFIG.APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload),
+    keepalive: true,
+  }).catch(() => {});
+}
+
+// ─── Speech-to-text (Soniox web SDK) ──────────────────────────────────────
+async function startRecording(targetEl, statusEl, btnEl) {
+  // Stop any ongoing session first.
+  if (state.sonioxClient) await stopRecording();
+
+  if (!window.SonioxClient) {
+    statusEl.textContent = 'Soniox SDK not loaded';
+    statusEl.classList.add('error');
+    return;
+  }
+  if (!CONFIG.APPS_SCRIPT_URL) {
+    statusEl.textContent = 'Apps Script URL not configured';
+    statusEl.classList.add('error');
+    return;
+  }
+
+  statusEl.textContent = 'அனுமதி கேட்கிறேன்... / requesting key...';
+  statusEl.classList.remove('error');
+
+  const startedAt = Date.now();
+  const tokenRes = await getSttToken();
+  if (!tokenRes.ok || !tokenRes.data || !tokenRes.data.api_key) {
+    statusEl.textContent = 'Could not get STT key: ' + (tokenRes.data?.error || tokenRes.reason || 'unknown');
+    statusEl.classList.add('error');
+    logTelemetry({ endpoint: '/transcribe', provider: 'soniox', status: 'auth_failed',
+      latency_ms: Date.now() - startedAt });
+    return;
+  }
+  const tempKey = tokenRes.data.api_key;
+
+  const baseText = targetEl.value || '';
+  state.sonioxBoundField = { targetEl, statusEl, btnEl, baseText, recordStart: Date.now(), tempKey };
+
+  const client = new window.SonioxClient({
+    apiKey: () => tempKey,
+    onStarted: () => {
+      btnEl.classList.add('recording');
+      statusEl.textContent = 'கேட்கிறேன்... (நிறுத்த மீண்டும் தட்டுக)';
+      statusEl.classList.remove('error');
+    },
+    onPartialResult: (result) => {
+      const interim = (result.tokens || [])
+        .filter((t) => !t.is_final)
+        .map((t) => t.text || '').join('');
+      const final = (result.tokens || [])
+        .filter((t) => t.is_final)
+        .map((t) => t.text || '').join('');
+      const seenFinal = state.sonioxBoundField?.finalSoFar || '';
+      const newFinal = seenFinal + final;
+      if (state.sonioxBoundField) state.sonioxBoundField.finalSoFar = newFinal;
+      const sep = baseText && !baseText.endsWith(' ') ? ' ' : '';
+      targetEl.value = (baseText + sep + newFinal + interim).trimStart();
+    },
+    onFinished: () => {
+      finishRecording('ok');
+    },
+    onError: (status, message, code) => {
+      finishRecording('error', message || code || 'soniox error');
+    },
+  });
+
+  state.sonioxClient = client;
+  try {
+    await client.start({
+      model: CONFIG.STT_MODEL,
+      languageHints: ['ta'],
+    });
+  } catch (err) {
+    finishRecording('error', String(err));
+  }
+}
+
+async function stopRecording() {
+  if (!state.sonioxClient) return;
+  try { await state.sonioxClient.stop(); } catch (e) { /* ignore */ }
+}
+
+function finishRecording(status, errMsg) {
+  const bound = state.sonioxBoundField;
+  state.sonioxBoundField = null;
+  state.sonioxClient = null;
+
+  if (!bound) return;
+  const { targetEl, statusEl, btnEl, recordStart, finalSoFar } = bound;
+  btnEl.classList.remove('recording');
+
+  if (status === 'error') {
+    statusEl.textContent = 'பிழை: ' + (errMsg || 'unknown');
+    statusEl.classList.add('error');
+  } else {
+    statusEl.textContent = '';
+    statusEl.classList.remove('error');
+  }
+
+  // Trigger a save-on-input now that final transcript is in.
+  targetEl.dispatchEvent(new Event('input'));
+
+  const audioSec = Math.max(0, (Date.now() - recordStart) / 1000);
+  const transcript = finalSoFar || '';
+  logTelemetry({
+    endpoint: '/transcribe',
+    provider: 'soniox',
+    status: status === 'ok' ? 'success' : 'error',
+    latency_ms: Date.now() - recordStart,
+    audio_seconds: Math.round(audioSec * 10) / 10,
+    output_chars: transcript.length,
+    cost_estimate_usd: Math.round(audioSec / 36) / 100,  // ~$0.10/hr
+    error_message: errMsg || '',
+  });
+}
+
+// ─── UI builders ──────────────────────────────────────────────────────────
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') node.className = v;
+    else if (k === 'html') node.innerHTML = v;
+    else if (k.startsWith('on')) node[k.toLowerCase()] = v;
+    else if (v !== false && v !== null && v !== undefined) node.setAttribute(k, v);
+  }
+  for (const c of children.flat()) {
+    if (c == null) continue;
+    if (typeof c === 'string') node.appendChild(document.createTextNode(c));
+    else node.appendChild(c);
+  }
+  return node;
+}
+
+function makeTextField({ key, label, labelEn, help, multiline = true, placeholder = '' }) {
+  const wrap = el('div', { class: 'field' });
+  wrap.appendChild(el('div', { class: 'field-label' },
+    label,
+    labelEn ? el('span', { class: 'field-label-en' }, labelEn) : null
+  ));
+  if (help) wrap.appendChild(el('div', { class: 'field-help' }, help));
+
+  const row = el('div', { class: 'text-row' });
+  const input = multiline
+    ? el('textarea', { placeholder, rows: 3 })
+    : el('input', { type: 'text', placeholder });
+  input.value = state.annotation[key] ?? '';
+  input.addEventListener('input', () => {
+    state.annotation[key] = input.value || null;
+    scheduleSave();
+  });
+
+  const status = el('div', { class: 'mic-status' });
+  const mic = el('button', { class: 'mic-btn', type: 'button', 'aria-label': 'குரல் உள்ளீடு' }, '🎤');
+  mic.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (mic.classList.contains('recording')) {
+      stopRecording();
+    } else {
+      startRecording(input, status, mic);
+    }
+  });
+  row.appendChild(input);
+  row.appendChild(mic);
+  wrap.appendChild(row);
+  wrap.appendChild(status);
+  return wrap;
+}
+
+function makeChipField({ key, label, labelEn, help, options, multi = false }) {
+  const wrap = el('div', { class: 'field' });
+  wrap.appendChild(el('div', { class: 'field-label' },
+    label,
+    labelEn ? el('span', { class: 'field-label-en' }, labelEn) : null
+  ));
+  if (help) wrap.appendChild(el('div', { class: 'field-help' }, help));
+
+  const chips = el('div', { class: 'chips' });
+  const isSelectedAfter = (val) => {
+    const cur = state.annotation[key];
+    if (multi) return Array.isArray(cur) && cur.includes(val);
+    return cur === val;
+  };
+  options.forEach((opt) => {
+    const v = typeof opt === 'string' ? opt : opt.v;
+    const ta = typeof opt === 'object' ? opt.ta : null;
+    const en = typeof opt === 'object' ? opt.en : null;
+    const chip = el('button', {
+      class: 'chip' + (isSelectedAfter(v) ? ' selected' : ''),
+      type: 'button', 'data-value': v,
+    });
+    chip.appendChild(document.createTextNode(ta || v));
+    if (en) chip.appendChild(el('span', { class: 'chip-en' }, en));
+    chip.addEventListener('click', () => {
+      if (multi) {
+        const arr = Array.isArray(state.annotation[key]) ? [...state.annotation[key]] : [];
+        const i = arr.indexOf(v);
+        if (i >= 0) arr.splice(i, 1); else arr.push(v);
+        state.annotation[key] = arr.length ? arr : null;
+      } else {
+        state.annotation[key] = state.annotation[key] === v ? null : v;
+      }
+      chips.querySelectorAll('.chip').forEach((c) => {
+        c.classList.toggle('selected', isSelectedAfter(c.dataset.value));
+      });
+      scheduleSave();
+    });
+    chips.appendChild(chip);
+  });
+  const skipBtn = el('button', { class: 'skip-btn', type: 'button' }, 'அழிக்க / Clear');
+  skipBtn.addEventListener('click', () => {
+    state.annotation[key] = null;
+    chips.querySelectorAll('.chip.selected').forEach((c) => c.classList.remove('selected'));
+    scheduleSave();
+  });
+  wrap.appendChild(chips);
+  wrap.appendChild(skipBtn);
+  return wrap;
+}
+
+function makeListField({ key, label, labelEn, help, placeholder }) {
+  const wrap = el('div', { class: 'field' });
+  wrap.appendChild(el('div', { class: 'field-label' },
+    label,
+    labelEn ? el('span', { class: 'field-label-en' }, labelEn) : null
+  ));
+  if (help) wrap.appendChild(el('div', { class: 'field-help' }, help));
+  const row = el('div', { class: 'text-row' });
+  const input = el('textarea', { placeholder, rows: 2 });
+  const cur = state.annotation[key];
+  input.value = Array.isArray(cur) ? cur.join(', ') : '';
+  input.addEventListener('input', () => {
+    const items = input.value.split(',').map((s) => s.trim()).filter(Boolean);
+    state.annotation[key] = items.length ? items : null;
+    scheduleSave();
+  });
+  const status = el('div', { class: 'mic-status' });
+  const mic = el('button', { class: 'mic-btn', type: 'button' }, '🎤');
+  mic.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (mic.classList.contains('recording')) stopRecording();
+    else startRecording(input, status, mic);
+  });
+  row.appendChild(input);
+  row.appendChild(mic);
+  wrap.appendChild(row);
+  wrap.appendChild(status);
+  return wrap;
+}
+
+function makeEmotionalValenceField() {
+  const wrap = el('div', { class: 'field' });
+  wrap.appendChild(el('div', { class: 'field-label' }, 'உணர்ச்சி நிலை',
+    el('span', { class: 'field-label-en' }, 'emotional valence (Plutchik)')));
+  wrap.appendChild(el('div', { class: 'field-help' },
+    'உணர்வின் அடிப்படை வகை மற்றும் தீவிரம்.'));
+  const cur = () => state.annotation.emotional_valence || null;
+  const get = (k) => cur()?.[k] || null;
+  const set = (k, v) => {
+    let ev = state.annotation.emotional_valence;
+    if (!ev) ev = state.annotation.emotional_valence = {};
+    if (v == null) {
+      delete ev[k];
+      if (!ev.primary || !ev.intensity) state.annotation.emotional_valence = null;
+    } else ev[k] = v;
+    scheduleSave();
+  };
+  const primary = el('div', { class: 'chips' });
+  ENUMS.plutchik.forEach((v) => {
+    const c = el('button', { class: 'chip' + (get('primary') === v ? ' selected' : ''), type: 'button' }, v);
+    c.addEventListener('click', () => {
+      const isCur = get('primary') === v;
+      set('primary', isCur ? null : v);
+      primary.querySelectorAll('.chip').forEach((x) => x.classList.toggle('selected',
+        x.textContent === (state.annotation.emotional_valence?.primary || '')));
+    });
+    primary.appendChild(c);
+  });
+  const intensity = el('div', { class: 'chips' });
+  ENUMS.intensity.forEach((v) => {
+    const c = el('button', { class: 'chip' + (get('intensity') === v ? ' selected' : ''), type: 'button' }, v);
+    c.addEventListener('click', () => {
+      const isCur = get('intensity') === v;
+      set('intensity', isCur ? null : v);
+      intensity.querySelectorAll('.chip').forEach((x) => x.classList.toggle('selected',
+        x.textContent === (state.annotation.emotional_valence?.intensity || '')));
+    });
+    intensity.appendChild(c);
+  });
+  const skipBtn = el('button', { class: 'skip-btn', type: 'button' }, 'அழிக்க / Clear');
+  skipBtn.addEventListener('click', () => {
+    state.annotation.emotional_valence = null;
+    [primary, intensity].forEach((g) => g.querySelectorAll('.chip.selected').forEach((c) => c.classList.remove('selected')));
+    scheduleSave();
+  });
+  wrap.appendChild(el('div', { class: 'field-help' }, 'முதன்மை — primary'));
+  wrap.appendChild(primary);
+  wrap.appendChild(el('div', { class: 'field-help', style: 'margin-top: 8px' }, 'தீவிரம் — intensity'));
+  wrap.appendChild(intensity);
+  wrap.appendChild(skipBtn);
+  return wrap;
+}
+
+// ─── Selection-based dictionary lookup ────────────────────────────────────
+let lookupPill = null;
+let dictPopover = null;
+
+function attachSelectionLookup(verseEl) {
+  const handler = () => setTimeout(() => maybeShowLookupPill(verseEl), 50);
+  verseEl.addEventListener('mouseup', handler);
+  verseEl.addEventListener('touchend', handler);
+}
+
+function maybeShowLookupPill(verseEl) {
+  removeLookupPill();
+  if (!CONFIG.APPS_SCRIPT_URL) return;
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return;
+  const text = sel.toString().trim();
+  if (text.length < 2 || text.length > 80) return;
+
+  const range = sel.getRangeAt(0);
+  if (!verseEl.contains(range.commonAncestorContainer)) return;
+
+  const rect = range.getBoundingClientRect();
+  const pill = document.createElement('button');
+  pill.className = 'lookup-pill';
+  pill.textContent = '🔎 பொருள்';
+  document.body.appendChild(pill);
+
+  const top = Math.max(8, rect.top - 50);
+  const left = Math.max(8, Math.min(
+    window.innerWidth - pill.offsetWidth - 8,
+    rect.left + (rect.width - pill.offsetWidth) / 2,
+  ));
+  pill.style.top = (top + window.scrollY) + 'px';
+  pill.style.left = left + 'px';
+
+  pill.addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    pill.textContent = '...';
+    pill.disabled = true;
+    const t0 = Date.now();
+    const result = await lookupWord(text);
+    const latency = Date.now() - t0;
+    logTelemetry({
+      endpoint: '/lookup',
+      provider: 'agarathi',
+      status: result.ok ? 'success' : 'error',
+      latency_ms: latency,
+      input_chars: text.length,
+      output_chars: result.ok ? JSON.stringify(result.data?.entries || []).length : 0,
+    });
+    showDictPopover(text, result, rect);
+    removeLookupPill();
+    window.getSelection().removeAllRanges();
+  });
+
+  lookupPill = pill;
+  setTimeout(() => {
+    document.addEventListener('touchstart', clearLookupOnOutside, { once: true });
+    document.addEventListener('mousedown', clearLookupOnOutside, { once: true });
+  }, 100);
+}
+
+function clearLookupOnOutside(e) {
+  if (lookupPill && !lookupPill.contains(e.target)) removeLookupPill();
+}
+function removeLookupPill() {
+  if (lookupPill) { lookupPill.remove(); lookupPill = null; }
+}
+
+function showDictPopover(word, result, anchorRect) {
+  if (dictPopover) dictPopover.remove();
+  const box = document.createElement('div');
+  box.className = 'dict-popover';
+
+  const closeBtn = el('button', { class: 'dict-popover-close', 'aria-label': 'close' }, '×');
+  box.appendChild(closeBtn);
+  box.appendChild(el('div', { class: 'dict-popover-word' }, word));
+
+  if (!result.ok || !result.data) {
+    box.appendChild(el('div', { class: 'dict-popover-empty' },
+      'அகராதி அணுக முடியவில்லை. ' + (result.reason || result.data?.error || '')));
+  } else {
+    const entries = result.data.entries || [];
+    if (!entries.length) {
+      box.appendChild(el('div', { class: 'dict-popover-empty' },
+        'இந்த வார்த்தை அகராதியில் இல்லை. சிறிய பகுதியை தேர்வுசெய்து முயற்சிக்கவும்.'));
+    } else {
+      entries.slice(0, 3).forEach((e) => {
+        if (e.source) box.appendChild(el('div', { class: 'dict-popover-source' }, e.source));
+        const defs = (e.definitions || []).slice(0, 3);
+        if (defs.length === 0) {
+          box.appendChild(el('div', { class: 'dict-popover-def' }, '(அர்த்தம் கிடைக்கவில்லை)'));
+        } else {
+          defs.forEach((d) => box.appendChild(el('div', { class: 'dict-popover-def' }, d)));
+        }
+      });
+    }
+    box.appendChild(el('div', { class: 'dict-popover-attrib' },
+      'Source: University of Madras Tamil Lexicon · via Agarathi'));
+  }
+
+  document.body.appendChild(box);
+  const fitsBelow = anchorRect.bottom + 220 < window.innerHeight;
+  box.style.top = (fitsBelow ? anchorRect.bottom + 12 : anchorRect.top - 220) + window.scrollY + 'px';
+  box.style.left = Math.max(8, Math.min(window.innerWidth - box.offsetWidth - 8, anchorRect.left)) + 'px';
+
+  closeBtn.addEventListener('click', () => { box.remove(); dictPopover = null; });
+  dictPopover = box;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;',
+  })[c]);
+}
+
+// ─── Save / debounce ──────────────────────────────────────────────────────
+function scheduleSave() {
+  if (state.saveTimer) clearTimeout(state.saveTimer);
+  state.saveTimer = setTimeout(commitSave, 600);
+}
+
+async function commitSave() {
+  const verse = state.verses[state.index];
+  if (!verse) return;
+  const annot = Object.assign({}, state.annotation, {
+    verse_id: verse.verse_id,
+    source_text: verse.source_text,
+    annotator: CONFIG.ANNOTATOR_NAME,
+    _updated_at: new Date().toISOString(),
+  });
+  const prog = getProgress(state.currentText.id);
+  prog.byId[verse.verse_id] = annot;
+  prog.lastIndex = state.index;
+  setProgress(state.currentText.id, prog);
+
+  const t0 = Date.now();
+  const result = await pushAnnotation(annot);
+  const latency = Date.now() - t0;
+  logTelemetry({
+    endpoint: '/annotation',
+    provider: 'sheets',
+    status: result.ok ? 'success' : 'error',
+    latency_ms: latency,
+  });
+  if (result.ok) {
+    showToast('✓ சேமிக்கப்பட்டது');
+  } else if (result.reason === 'no_url') {
+    showToast('⚠ Sheets URL அமைக்கப்படவில்லை — உள்நாட்டில் சேமிக்கப்பட்டது');
+  } else {
+    showToast('⚠ Sheets-ல் சேமிக்க முடியவில்லை');
+  }
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('save-toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+// ─── Page rendering ───────────────────────────────────────────────────────
+function renderHome() {
+  document.getElementById('topbar-title').textContent = 'செந்தமிழ் — Sentamizh';
+  document.getElementById('progress-text').textContent = '';
+  document.getElementById('progress-fill').style.width = '0%';
+
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const list = el('div', { class: 'corpus-list' });
+  list.appendChild(el('h2', {}, 'எந்த நூலை தொடங்க வேண்டும்?'));
+  list.appendChild(el('p', {}, 'Pick a text to annotate. Your progress is saved automatically.'));
+
+  if (!CONFIG.APPS_SCRIPT_URL) {
+    list.appendChild(el('div', { class: 'config-warning' },
+      '⚠️ Apps Script URL is not configured. Annotations save to this device only. ' +
+      'Open SETUP.md to enable Sheets sync, voice input, and dictionary lookup.'));
+  }
+
+  state.manifest.texts.forEach((t) => {
+    const prog = getProgress(t.id);
+    const done = Object.keys(prog.byId).length;
+    const pct = Math.round((done / t.count) * 100);
+    const card = el('a', { class: 'corpus-card', href: '#' });
+    card.addEventListener('click', (e) => { e.preventDefault(); openText(t); });
+    card.appendChild(el('div', {},
+      el('span', { class: 'corpus-card-name' }, t.name_ta),
+      el('span', { class: 'corpus-card-name-en' }, t.name_en)));
+    card.appendChild(el('div', { class: 'corpus-card-meta' },
+      el('span', {}, `${t.layer || ''}`),
+      el('span', { class: 'corpus-card-progress' }, `${done} / ${t.count}`)));
+    const bar = el('div', { class: 'corpus-progress-bar' },
+      el('div', { class: 'corpus-progress-fill', style: `width: ${pct}%` }));
+    card.appendChild(bar);
+    list.appendChild(card);
+  });
+  c.appendChild(list);
+}
+
+async function openText(textMeta) {
+  state.currentText = textMeta;
+  document.getElementById('content').innerHTML =
+    '<div class="container"><p>ஏற்றுகிறது... / loading...</p></div>';
+
+  const res = await fetch('data/' + textMeta.file);
+  state.verses = await res.json();
+
+  const prog = getProgress(textMeta.id);
+  if (CONFIG.APPS_SCRIPT_URL) {
+    const remote = await fetchAnnotations(textMeta.id);
+    Object.assign(prog.byId, remote || {});
+    setProgress(textMeta.id, prog);
+  }
+  state.index = Math.min(prog.lastIndex || 0, state.verses.length - 1);
+  renderVerse();
+}
+
+function renderVerse() {
+  const verse = state.verses[state.index];
+  if (!verse) return;
+  const text = state.currentText;
+  document.getElementById('topbar-title').textContent = text.name_ta;
+  document.getElementById('progress-text').textContent =
+    `${state.index + 1} / ${state.verses.length}`;
+  document.getElementById('progress-fill').style.width =
+    ((state.index + 1) / state.verses.length * 100) + '%';
+
+  const existing = (loadLocal()[text.id]?.byId || {})[verse.verse_id] || {};
+  state.annotation = {};
+  const annotatorFields = [
+    'modern_tamil','english','thinai','turai','akam_or_puram',
+    'karu','uri','ullurai','speaker_role','metre','pann','dhvani_layer',
+    'rasa_primary','rasa_secondary','themes','philosophical_concept',
+    'cultural_context','storytelling_seed_narrative','storytelling_seed_emotional',
+    'nayika_bheda','visual_imagery','emotional_valence','annotation_confidence',
+  ];
+  annotatorFields.forEach((f) => {
+    if (existing[f] !== undefined && existing[f] !== null) state.annotation[f] = existing[f];
+    else if (verse[f] !== undefined && verse[f] !== null) state.annotation[f] = verse[f];
+    else state.annotation[f] = null;
+  });
+
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const container = el('div', { class: 'container' });
+
+  container.appendChild(el('div', { class: 'verse-id' }, verse.verse_id));
+
+  const pre = el('div', { class: 'pre-extracted' });
+  if (verse.cultural_context) {
+    pre.appendChild(el('div', {},
+      el('span', { class: 'label' }, 'பின்னணி:'), verse.cultural_context));
+  }
+  pre.appendChild(el('div', {},
+    el('span', { class: 'label' }, 'நூல்:'),
+    `${verse.source_text} • ${verse.layer} • ${verse.period}`));
+  if (verse.verse_number) {
+    pre.appendChild(el('div', {},
+      el('span', { class: 'label' }, 'பாடல் எண்:'), verse.verse_number));
+  }
+  container.appendChild(pre);
+
+  // Reference translation card — Phase 1: placeholder only.
+  const refCard = el('div', { class: 'ref-card empty' });
+  refCard.appendChild(el('span', { class: 'ref-label' }, 'Scholarly translation'));
+  refCard.appendChild(el('span', {}, verse.reference_translation
+    ? verse.reference_translation
+    : 'Not yet covered by a public-domain English source. Long-press any word in the verse for a dictionary lookup.'));
+  container.appendChild(refCard);
+
+  const verseTextEl = el('div', { class: 'verse-text' }, verse.classical_tamil || '');
+  attachSelectionLookup(verseTextEl);
+  container.appendChild(verseTextEl);
+
+  // ─ Translation
+  container.appendChild(el('div', { class: 'section-h' },
+    el('span', { class: 'section-h-ta' }, 'மொழிபெயர்ப்பு'), ' — TRANSLATION'));
+  container.appendChild(makeTextField({
+    key: 'modern_tamil', label: 'நவீன தமிழ்',
+    labelEn: 'modern Tamil paraphrase',
+    help: 'நீ இந்தப் பாடலை இக்கால தமிழில் எப்படி சொல்வாய்?',
+    placeholder: 'மைக் பொத்தானை அழுத்தி பேசுங்கள்...',
+  }));
+  container.appendChild(makeTextField({
+    key: 'english', label: 'English',
+    labelEn: 'english translation',
+    help: 'Optional. A free English rendering.',
+    placeholder: 'Tap mic and dictate, or skip...',
+  }));
+
+  // ─ Tamil poetics
+  container.appendChild(el('div', { class: 'section-h' },
+    el('span', { class: 'section-h-ta' }, 'தமிழ் மரபு'), ' — TAMIL POETICS'));
+
+  if (verse.layer === 'Sangam') {
+    container.appendChild(makeChipField({
+      key: 'akam_or_puram', label: 'அகம் / புறம்', labelEn: 'akam or puram',
+      help: 'அகம் = காதல், உள்மனம். புறம் = வீரம், சமூகம்.',
+      options: ENUMS.akam_or_puram,
+    }));
+    if (state.annotation.akam_or_puram === 'Akam' || verse.akam_or_puram === 'Akam') {
+      container.appendChild(makeChipField({
+        key: 'thinai', label: 'திணை', labelEn: 'landscape-mode',
+        help: 'காதல் நிலையை உருவகப்படுத்தும் நிலம்.',
+        options: ENUMS.thinai,
+      }));
+    }
+  }
+
+  container.appendChild(makeTextField({
+    key: 'turai', label: 'துறை',
+    labelEn: 'sub-genre / dramatic scenario',
+    help: 'பாடலில் நிகழும் சூழல், எடுத்துக்காட்டாக "தலைவன் தோழியிடம் சொல்லியது"',
+  }));
+  container.appendChild(makeChipField({
+    key: 'speaker_role', label: 'பேசுபவர்',
+    labelEn: 'who is speaking',
+    help: 'இந்தப் பாடலில் பேசுபவர் யார்?',
+    options: ENUMS.speaker_role,
+  }));
+  container.appendChild(makeChipField({
+    key: 'metre', label: 'யாப்பு', labelEn: 'metre',
+    options: ENUMS.metre,
+  }));
+  container.appendChild(makeTextField({
+    key: 'pann', label: 'பண்', labelEn: 'melodic mode',
+    help: 'பக்தி பாடல்களுக்கு மட்டும். எ.கா. நட்டபாடை, காந்தாரம்.',
+  }));
+
+  const advancedTamil = el('details');
+  advancedTamil.appendChild(el('summary', {}, 'மேலதிக களம் — Advanced Tamil fields'));
+  advancedTamil.appendChild(makeListField({
+    key: 'karu', label: 'கரு',
+    labelEn: 'native elements (deity, fauna, flora, occupations...)',
+    help: 'காற்புள்ளியால் பிரிக்கவும். e.g. வண்டு, கொன்றை, பாலை மரம்',
+    placeholder: 'வண்டு, கொன்றை, ...',
+  }));
+  advancedTamil.appendChild(makeTextField({
+    key: 'uri', label: 'உரி',
+    labelEn: 'essential emotional activity (Tolkappiyam)',
+    help: 'பாடல் உணர்ச்சியின் "ஆன்மா" — எ.கா. பிரிவு, இரத்தல்.',
+  }));
+  advancedTamil.appendChild(makeTextField({
+    key: 'ullurai', label: 'உள்ளுறை',
+    labelEn: 'metaphorical correspondence (landscape ↔ emotion)',
+    help: 'நிலம்/இயற்கை ↔ மனிதர் உணர்வு இடையே மறைபொருள் ஒப்பீடு.',
+  }));
+  advancedTamil.appendChild(makeTextField({
+    key: 'dhvani_layer', label: 'த்வனி',
+    labelEn: 'suggested / implied meaning',
+    help: 'நேரடியாக சொல்லாமல் சுட்டப்படும் கருத்து.',
+  }));
+  container.appendChild(advancedTamil);
+
+  // ─ Meaning & emotion
+  container.appendChild(el('div', { class: 'section-h' },
+    el('span', { class: 'section-h-ta' }, 'பொருள் & உணர்வு'), ' — MEANING & EMOTION'));
+  container.appendChild(makeChipField({
+    key: 'rasa_primary', label: 'முதன்மை ரசம்', labelEn: 'primary rasa (Navarasa)',
+    options: ENUMS.rasa,
+  }));
+  container.appendChild(makeChipField({
+    key: 'rasa_secondary', label: 'துணை ரசம்',
+    labelEn: 'secondary rasa(s) — multi-select',
+    options: ENUMS.rasa.map((r) => r.v), multi: true,
+  }));
+  container.appendChild(makeListField({
+    key: 'themes', label: 'கருத்து',
+    labelEn: 'themes (comma-separated)',
+    help: 'எ.கா. காதல், பிரிவு, பக்தி, அறம், போர்.',
+    placeholder: 'காதல், பிரிவு, ...',
+  }));
+  container.appendChild(makeTextField({
+    key: 'philosophical_concept', label: 'தத்துவம்',
+    labelEn: 'philosophical concept',
+    help: 'எ.கா. அன்பு, அறம், பக்தி, மாயா.',
+  }));
+  container.appendChild(makeTextField({
+    key: 'cultural_context', label: 'பின்னணி',
+    labelEn: 'cultural context (poet, period, tradition)',
+  }));
+  container.appendChild(makeTextField({
+    key: 'storytelling_seed_narrative', label: 'கதை விதை — கதை',
+    labelEn: 'narrative seed (Epic/Bhakti)',
+    help: 'பாத்திரப் பிணக்கு, அற நிலை, தெய்வீக உறவு.',
+  }));
+  container.appendChild(makeTextField({
+    key: 'storytelling_seed_emotional', label: 'கதை விதை — உணர்வு',
+    labelEn: 'emotional seed (Sangam)',
+    help: 'நிலம், உணர்வு, மறைச் சூழல்.',
+  }));
+
+  // ─ Cross-cultural bridge
+  container.appendChild(el('div', { class: 'section-h' },
+    el('span', { class: 'section-h-ta' }, 'வெளி பார்வை'), ' — UNIVERSAL'));
+  container.appendChild(makeChipField({
+    key: 'nayika_bheda', label: 'நாயிகா பேதம்',
+    labelEn: 'heroine state (Ashta Nayika)',
+    help: 'பெண் கதாபாத்திர நிலை — பாரத மரபு.',
+    options: ENUMS.nayika_bheda,
+  }));
+  container.appendChild(makeListField({
+    key: 'visual_imagery', label: 'காட்சிப் படிமம்',
+    labelEn: 'visual imagery (comma-separated)',
+    help: 'எ.கா. போர் முரசு வைகறையில், மலர்ந்த மல்லிகை.',
+    placeholder: 'மரம், கடல், மலர், ...',
+  }));
+  container.appendChild(makeEmotionalValenceField());
+
+  container.appendChild(el('div', { class: 'section-h' },
+    el('span', { class: 'section-h-ta' }, 'நம்பிக்கை'), ' — CONFIDENCE'));
+  container.appendChild(makeChipField({
+    key: 'annotation_confidence', label: 'எவ்வளவு உறுதியாக?',
+    labelEn: 'how confident are you?',
+    options: ENUMS.confidence,
+  }));
+
+  const nav = el('div', { class: 'nav' });
+  const prev = el('button', { class: 'nav-btn', type: 'button' }, '← முந்தைய');
+  prev.disabled = state.index === 0;
+  prev.addEventListener('click', () => goToVerse(state.index - 1));
+  const next = el('button', { class: 'nav-btn primary', type: 'button' }, 'அடுத்தது →');
+  next.disabled = state.index === state.verses.length - 1;
+  next.addEventListener('click', () => goToVerse(state.index + 1));
+  nav.appendChild(prev);
+  nav.appendChild(next);
+
+  c.appendChild(container);
+  c.appendChild(nav);
+  window.scrollTo(0, 0);
+}
+
+async function goToVerse(idx) {
+  await stopRecording();
+  removeLookupPill();
+  if (dictPopover) { dictPopover.remove(); dictPopover = null; }
+  if (state.saveTimer) {
+    clearTimeout(state.saveTimer);
+    state.saveTimer = null;
+    await commitSave();
+  }
+  if (idx < 0 || idx >= state.verses.length) return;
+  state.index = idx;
+  const prog = getProgress(state.currentText.id);
+  prog.lastIndex = idx;
+  setProgress(state.currentText.id, prog);
+  renderVerse();
+}
+
+async function goHome() {
+  await stopRecording();
+  removeLookupPill();
+  if (dictPopover) { dictPopover.remove(); dictPopover = null; }
+  if (state.saveTimer) {
+    clearTimeout(state.saveTimer);
+    state.saveTimer = null;
+    commitSave();
+  }
+  state.currentText = null;
+  state.verses = [];
+  renderHome();
+}
+window.goHome = goHome;
+
+async function boot() {
+  try {
+    const res = await fetch('data/manifest.json');
+    state.manifest = await res.json();
+    renderHome();
+  } catch (err) {
+    document.getElementById('content').innerHTML =
+      '<div class="container"><p style="color:#dc2626">Could not load corpus manifest. ' +
+      'If you opened this file directly (file://...), please host it (Netlify Drop or local server). ' +
+      'See SETUP.md.</p></div>';
+  }
+}
+boot();
+</script>
+</body>
+</html>

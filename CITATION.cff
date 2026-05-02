@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use the Sentamizh Corpus, please cite it as below."
+title: "Sentamizh Corpus: A multi-framework annotated corpus of Classical Tamil literature"
+abstract: >-
+  An open-source dataset of Classical Tamil literature with a 32-field
+  schema spanning Tolkappiyam-era Tamil poetics, Natya Shastra rasa theory,
+  Anandavardhana's dhvani, and a cross-cultural bridge layer. Covers
+  Sangam, Bhakti, Epic, and Spiritual text layers across 10,393 entries
+  from 9 source texts, with provenance traced to Project Madurai, Tamil
+  Virtual Academy, and Vaidehi Herbert's Sangam translations.
+type: dataset
+authors:
+  - family-names: Prasad
+    given-names: Revathi
+    email: prasadrevathi.2021@gmail.com
+license: Apache-2.0
+repository-code: "https://github.com/indic-corpora/sentamizh-corpus"
+keywords:
+  - Tamil
+  - Classical Tamil
+  - Sangam literature
+  - Bhakti literature
+  - Tolkappiyam
+  - dhvani
+  - rasa
+  - low-resource NLP
+  - multilingual
+  - cultural heritage
+  - dataset
+version: "0.1.0"
+date-released: "2026-04-30"

@@ -1,0 +1,44 @@
+[
+  {
+    "verse_id": "PURN-001",
+    "source_text": "Purananuru",
+    "layer": "Sangam",
+    "period": "300 BCE – 300 CE",
+    "verse_number": "1",
+    "classical_tamil": "கடவுள் வாழ்த்து — இறைவனை வணங்கி, அறத்தின் வழி நிற்போம் என்ற தொடக்கப் பாடல்.",
+    "modern_tamil": "கடவுளை வணங்கி, அறநெறியில் நிலைத்து நிற்போம் என்று கூறும் தொடக்கப் பாடல்.",
+    "english": "An invocatory verse — we bow before the divine and pledge to stand on the path of virtue.",
+    "source_url": "https://www.projectmadurai.org/pm_etexts/utf8/pmuni0001.html",
+    "difficulty": "classical",
+
+    "thinai": null,
+    "turai": null,
+    "akam_or_puram": "Puram",
+    "karu": ["temple", "sacred fire", "offering"],
+    "uri": "Reverence and submission before cosmic moral order",
+    "ullurai": null,
+    "speaker_role": "bard",
+    "metre": "aciriyappa",
+    "pann": null,
+    "dhvani_layer": "The opening invocation establishes that all acts of war, generosity, and kingship that follow are subordinate to cosmic moral order.",
+
+    "rasa_primary": "Shanta",
+    "rasa_secondary": ["Adbhuta"],
+    "themes": ["devotion", "dharma", "invocation"],
+    "philosophical_concept": "Aram",
+    "cultural_context": "Purananuru opens with a Kadavul Vaazhthu (divine invocation), a convention in Sangam anthologies. The poet sets the moral frame before 400 poems of kings, war, death, and generosity.",
+    "storytelling_seed_narrative": null,
+    "storytelling_seed_emotional": "Before the wars begin, before the kings rise and fall — a single voice pauses to bow. Everything that follows is held within that silence.",
+
+    "nayika_bheda": null,
+    "visual_imagery": ["sacred flame in a dark temple", "bowed head", "stillness before drums"],
+    "emotional_valence": {
+      "primary": "trust",
+      "intensity": "high",
+      "secondary": "anticipation"
+    },
+
+    "annotator": "Revathi",
+    "annotation_confidence": "medium"
+  }
+]

@@ -1,0 +1,219 @@
+#!/usr/bin/env python3
+"""
+Sentamizh Corpus — Markdown Exporter
+
+Converts each `*_All.json` file in `data/processed/` to a self-contained
+Markdown file in `exports/markdown/`. Each verse is rendered with all 32
+schema fields so the export is round-trippable to JSON if needed.
+
+Usage:
+    python export_markdown.py
+    python export_markdown.py --text purananuru
+"""
+
+import json
+import argparse
+from pathlib import Path
+from typing import Dict, Any, List
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
+EXPORT_DIR = PROJECT_ROOT / "exports" / "markdown"
+
+
+# Mapping: filename stem in data/processed → human-readable corpus name
+CORPUS_FILES = {
+    "Purananuru_All": "Purananuru",
+    "Akananuru_All": "Akananuru",
+    "Kuruntokai_Vaidehi_All": "Kuruntokai",
+    "Natrinai_Vaidehi_All": "Natrinai",
+    "Thevaram_All": "Thevaram",
+    "Divya_Prabandham_All": "Divya Prabandham",
+    "Silappatikaram_All": "Silappatikaram",
+    "Manimekalai_All": "Manimekalai",
+    "Thirumanthiram_All": "Thirumanthiram",
+}
+
+
+# Field display order (groups), matching schema layers.
+FIELD_GROUPS = [
+    ("Core", [
+        "verse_id", "source_text", "layer", "period",
+        "verse_number", "difficulty", "source_url",
+    ]),
+    ("Text", [
+        "classical_tamil", "modern_tamil", "english",
+    ]),
+    ("Tamil-native interpretive (Tolkappiyam frame)", [
+        "thinai", "turai", "akam_or_puram",
+        "karu", "uri", "ullurai",
+        "speaker_role", "metre", "pann", "dhvani_layer",
+    ]),
+    ("Interpretive (themes & rasa)", [
+        "rasa_primary", "rasa_secondary", "themes",
+        "philosophical_concept", "cultural_context",
+        "storytelling_seed_narrative", "storytelling_seed_emotional",
+    ]),
+    ("Cross-cultural bridge", [
+        "nayika_bheda", "visual_imagery", "emotional_valence",
+    ]),
+    ("Provenance", [
+        "annotator", "annotation_confidence",
+    ]),
+]
+
+
+def fmt_value(v: Any) -> str:
+    """Render a single field value as inline markdown."""
+    if v is None or v == "" or v == [] or v == {}:
+        return "_—_"
+    if isinstance(v, list):
+        return ", ".join(str(item) for item in v)
+    if isinstance(v, dict):
+        # emotional_valence and similar nested objects
+        parts = []
+        for k, val in v.items():
+            parts.append(f"{k}: {val}")
+        return "; ".join(parts)
+    return str(v).replace("|", "\\|")
+
+
+def fmt_text_block(s: Any) -> str:
+    """Render a multi-line text field as a fenced block."""
+    if s is None or s == "":
+        return "_—_"
+    s = str(s)
+    if "\n" in s:
+        return "```\n" + s + "\n```"
+    return s
+
+
+def render_verse(entry: Dict[str, Any]) -> str:
+    """Render a single corpus entry as a markdown section."""
+    lines: List[str] = []
+    vid = entry.get("verse_id", "—")
+    lines.append(f"### {vid}")
+    lines.append("")
+
+    # Inline summary line
+    summary_bits = []
+    for k in ("source_text", "layer", "period", "verse_number"):
+        v = entry.get(k)
+        if v:
+            label = k.replace("_", " ").title()
+            summary_bits.append(f"**{label}:** {v}")
+    if summary_bits:
+        lines.append(" | ".join(summary_bits))
+        lines.append("")
+
+    # Verse text — most important, give it a dedicated block
+    classical = entry.get("classical_tamil")
+    if classical:
+        lines.append("**Classical Tamil**")
+        lines.append("")
+        lines.append(fmt_text_block(classical))
+        lines.append("")
+
+    modern = entry.get("modern_tamil")
+    if modern:
+        lines.append("**Modern Tamil**")
+        lines.append("")
+        lines.append(fmt_text_block(modern))
+        lines.append("")
+
+    eng = entry.get("english")
+    if eng:
+        lines.append("**English**")
+        lines.append("")
+        lines.append(fmt_text_block(eng))
+        lines.append("")
+
+    # All other fields, grouped
+    skip = {"verse_id", "source_text", "layer", "period",
+            "verse_number", "classical_tamil", "modern_tamil", "english"}
+    for group_name, group_fields in FIELD_GROUPS:
+        rendered = []
+        for f in group_fields:
+            if f in skip:
+                continue
+            if f not in entry:
+                continue
+            val = entry.get(f)
+            label = f.replace("_", " ").title()
+            rendered.append(f"- **{label}:** {fmt_value(val)}")
+        if rendered:
+            lines.append(f"_{group_name}_")
+            lines.append("")
+            lines.extend(rendered)
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+def render_corpus(corpus_name: str, entries: List[Dict[str, Any]]) -> str:
+    """Render the full corpus to a markdown document."""
+    lines: List[str] = []
+    lines.append(f"# {corpus_name}")
+    lines.append("")
+    lines.append(f"**Total entries:** {len(entries)}")
+    lines.append("")
+    lines.append("Generated by the Sentamizh Corpus extraction pipeline. "
+                 "Each entry below contains all 32 schema fields; missing values "
+                 "are displayed as `—`.")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    for entry in entries:
+        lines.append(render_verse(entry))
+        lines.append("---")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def export_one(stem: str, corpus_name: str) -> Path:
+    """Read processed/{stem}.json, write exports/markdown/{stem}.md."""
+    src = PROCESSED_DIR / f"{stem}.json"
+    if not src.exists():
+        print(f"  skip {stem}: file not found")
+        return None
+    with open(src, "r", encoding="utf-8") as f:
+        entries = json.load(f)
+    if not isinstance(entries, list):
+        entries = [entries]
+    out_path = EXPORT_DIR / f"{stem.replace('_All', '')}.md"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    md = render_corpus(corpus_name, entries)
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(md)
+    size_mb = out_path.stat().st_size / (1024 * 1024)
+    print(f"  {corpus_name}: {len(entries)} entries → {out_path.name} ({size_mb:.1f} MB)")
+    return out_path
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Export corpus JSON to Markdown")
+    parser.add_argument("--text", help="Convert one specific text (e.g. 'purananuru')")
+    args = parser.parse_args()
+
+    name_to_stem = {n.lower().replace(" ", "_"): s for s, n in CORPUS_FILES.items()}
+
+    targets = list(CORPUS_FILES.items())
+    if args.text:
+        wanted = args.text.lower()
+        if wanted in name_to_stem:
+            stem = name_to_stem[wanted]
+            targets = [(stem, CORPUS_FILES[stem])]
+        else:
+            print(f"Unknown text: {args.text}")
+            print(f"Choices: {list(name_to_stem)}")
+            return
+
+    print(f"Exporting to {EXPORT_DIR}/")
+    for stem, name in targets:
+        export_one(stem, name)
+    print("Done.")
+
+
+if __name__ == "__main__":
+    main()

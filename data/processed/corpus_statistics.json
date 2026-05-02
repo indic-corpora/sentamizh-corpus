@@ -1,0 +1,66 @@
+{
+  "timestamp": "2026-04-24T17:28:11.755709",
+  "texts": {
+    "purananuru": {
+      "file": "Purananuru_All.json",
+      "entries": 388,
+      "size_mb": 0.86,
+      "description": "Purananuru (Ancient Tamil Ethics)"
+    },
+    "akananuru": {
+      "file": "Akananuru_All.json",
+      "entries": 400,
+      "size_mb": 1.13,
+      "description": "Akananuru (Sangam Love Poetry)"
+    },
+    "thevaram": {
+      "file": "Thevaram_All.json",
+      "entries": 4043,
+      "size_mb": 5.84,
+      "description": "Thevaram (Bhakti Sacred Hymns)"
+    },
+    "divya_prabandham": {
+      "file": "Divya_Prabandham_All.json",
+      "entries": 3928,
+      "size_mb": 5.77,
+      "description": "Divya Prabandham (Vaishnavite Bhakti)"
+    },
+    "silappatikaram": {
+      "file": "Silappatikaram_All.json",
+      "entries": 10,
+      "size_mb": 0.17,
+      "description": "Silappatikaram (Sangam Epic)"
+    },
+    "manimekalai": {
+      "file": "Manimekalai_All.json",
+      "entries": 493,
+      "size_mb": 0.92,
+      "description": "Manimekalai (Sangam Epic)"
+    },
+    "thirumanthiram": {
+      "file": "Thirumanthiram_All.json",
+      "entries": 335,
+      "size_mb": 0.44,
+      "description": "Thirumanthiram (Shaivite Tantra)"
+    },
+    "kuruntokai": {
+      "file": "Kuruntokai_Vaidehi_All.json",
+      "entries": 401,
+      "size_mb": 1.92,
+      "description": "Kuruntokai (Sangam Love Poetry)"
+    },
+    "natrinai": {
+      "file": "Natrinai_Vaidehi_All.json",
+      "entries": 396,
+      "size_mb": 2.42,
+      "description": "Natrinai (Sangam Love Poetry)"
+    }
+  },
+  "totals": {
+    "texts_processed": 9,
+    "total_entries": 10394,
+    "total_size_mb": 19.472429275512695,
+    "texts_success": 9,
+    "texts_failed": 0
+  }
+}

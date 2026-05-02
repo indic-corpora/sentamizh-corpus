@@ -1,0 +1,52 @@
+# Sentamizh Corpus — Netlify configuration.
+#
+# Netlify auto-deploys this directory on every push to main once the GitHub
+# repo is linked. To link: Netlify dashboard → Add new site → Import from
+# GitHub → pick this repo. The publish/build settings below take effect
+# automatically.
+#
+# See DEPLOY.md for the full runbook.
+
+[build]
+  publish = "annotator"
+  # The annotator is pure static HTML/JS/JSON. The only build step is to
+  # populate annotator/data/ from data/processed/ — corpus JSONs are kept
+  # canonical in data/processed/ and copied (with the filenames the annotator
+  # expects, per annotator/data/manifest.json) at deploy time. This avoids
+  # ~20 MB of duplicated data in the repo.
+  command = "python3 scripts/build_annotator_data.py"
+
+# ── Cache policy ──────────────────────────────────────────────────────────
+# Verse JSONs (Akananuru.json, Thevaram.json, etc.) are large but rarely
+# change. Cache them for a day. The manifest changes more often (when texts
+# are added) so cache it briefly.
+[[headers]]
+  for = "/data/*.json"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, must-revalidate"
+
+[[headers]]
+  for = "/data/manifest.json"
+  [headers.values]
+    Cache-Control = "public, max-age=300, must-revalidate"
+
+# index.html itself: never cache aggressively — we want changes visible
+# immediately after a deploy.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# ── Security headers ──────────────────────────────────────────────────────
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "microphone=(self), camera=(), geolocation=()"
