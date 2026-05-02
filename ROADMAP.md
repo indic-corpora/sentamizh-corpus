@@ -23,15 +23,15 @@ Status tags used below: `[planned]`, `[in progress]`, `[shipped]`, `[abandoned]`
 
 - `[planned]` PaaPeyarchi integration to draft `modern_tamil` field across matched verses. License segregation is required first — PaaPeyarchi is CC-BY-NC-2.0, so its content cannot be merged into the Apache-2.0 corpus without an explicit non-commercial subset or independent re-translation. See [docs/integration-strategy.md](docs/integration-strategy.md).
 - `[planned]` LLM-assisted pre-annotation of the still-null interpretive fields, followed by expert review. The LLM annotator (`scripts/annotate_entries.py`) is built; the trigger is having the controlled vocabularies signed off (Phase 1 item above) so the LLM is given stable enums.
-- `[planned]` Self-hosted IndicConformer ASR as an alternative to Soniox, served behind the same `/transcribe` proxy contract so the annotator frontend doesn't change. This is a real-world test of the proxy-contract decision recorded in [ADR 0004](docs/decisions/0004-proxy-contract-for-pluggable-backends.md).
-- `[planned]` Empirical benchmark of Tamil ASR on classical-Tamil dictation: Whisper-large-v3 vs Soniox vs self-hosted IndicConformer. Methodology, audio sample, WER results, latency, and cost-per-minute. The benchmark exists partly to close the evidence gap noted in [ADR 0002](docs/decisions/0002-soniox-over-whisper-for-tamil-stt.md).
+- `[planned]` Self-hosted Tamil ASR via [VEXYL-STT](https://medium.com/@anilmathewm/vexyl-stt-free-self-hosted-indian-language-speech-to-text-server-f2909003aaf6) — a deploy-ready wrapper around AI4Bharat's IndicConformer with WebSocket streaming. Substantially less infrastructure work than building a serving layer from scratch. Served behind the same `/transcribe` proxy contract so the annotator frontend doesn't change ([ADR 0004](docs/decisions/0004-proxy-contract-for-pluggable-backends.md)).
+- `[planned]` Empirical comparison of Tamil ASR options on classical-Tamil dictation: Soniox, [vasista22/whisper-tamil-medium](https://huggingface.co/vasista22/whisper-tamil-medium), VEXYL-STT (IndicConformer), and — if its audio modality handles Tamil — [Nemotron 3 Nano Omni](https://developer.nvidia.com/blog/nvidia-nemotron-3-nano-omni-powers-multimodal-agent-reasoning-in-a-single-efficient-open-model/). Methodology, audio sample, WER, latency, cost-per-minute. Closes the evidence gap noted in [ADR 0002](docs/decisions/0002-soniox-over-whisper-for-tamil-stt.md) and informs the Phase 5 fine-tuning base-model choice.
 - `[planned]` Add Naladiyar (Didactic, ~400 quatrains). The Project Madurai URL we tried previously serves Malaipadukadaam by mistake; the corrected source needs to be identified.
 - `[planned]` Add Pazhamozhi (Didactic, ~400 proverbs). Source not yet identified.
 
 ## Phase 3 — Performance and accessibility
 
-- `[planned]` TensorRT INT8 quantization of the self-hosted ASR for faster inference on commodity GPUs.
-- `[planned]` Hugging Face dataset publication with a formal `0.1.0` release tag.
+- `[planned]` Quantization of the Phase 5 fine-tune: TensorRT INT8 baseline, plus FP8 and NVFP4 (Nemotron's first-class quantization options). Publish before/after benchmarks on the same classical-Tamil dictation set used in the Phase 2 ASR comparison.
+- `[planned]` Hugging Face dataset publication under the [`indic-corpora`](https://huggingface.co/indic-corpora) namespace with a formal `0.1.0` release tag.
 - `[planned]` Hugging Face Space demo: a small interactive viewer over the corpus.
 
 ## Phase 4 — Cross-corpus extension
@@ -43,8 +43,8 @@ Status tags used below: `[planned]`, `[in progress]`, `[shipped]`, `[abandoned]`
 
 ## Phase 5 — Voice and conversational applications (hypothetical)
 
-- `[planned]` Investigate the corpus's utility as a register/voice reference for natural-sounding spoken Tamil/Hindi/English script generation. Hypothesis: the dhvani / ullurai / rasa annotations capture the indirect, evocative quality of literary Tamil in a way that may inform less-formal conversational AI script generation. **This is a hypothesis to be tested, not a claim about the corpus's current capability.**
-- `[planned]` NeMo fine-tuning experiments using the corpus as training data for downstream Indic NLP tasks.
+- `[planned]` Fine-tune [Nemotron 3 Nano Omni](https://developer.nvidia.com/blog/nvidia-nemotron-3-nano-omni-powers-multimodal-agent-reasoning-in-a-single-efficient-open-model/) on the Sentamizh Corpus to add Tamil literary understanding to a base model whose pretraining is unlikely to include classical Tamil. Publish: methodology, fine-tune weights under the [`indic-corpora`](https://huggingface.co/indic-corpora) HuggingFace namespace, and benchmarks against the base model on Tamil literary tasks. Reasoning recorded in [ADR 0005](docs/decisions/0005-nemotron-3-nano-omni-as-phase-5-target.md).
+- `[planned]` Test the voice/register hypothesis using Nemotron's audio modality as the testbed: do the dhvani / ullurai / rasa annotations capture enough of the indirect, evocative quality of literary Tamil to inform less-formal conversational generation? **This is a hypothesis to be tested, not a claim about the corpus's current capability.**
 
 ## Things explicitly NOT planned
 

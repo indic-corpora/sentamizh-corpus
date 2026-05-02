@@ -9,6 +9,15 @@ The format is based on [Keep a Changelog v1.1.0](https://keepachangelog.com/en/1
 ### Added
 - `scripts/build_annotator_data.py` — populates `annotator/data/` from the canonical `data/processed/` files at deploy time, so the ~19 MB corpus is not duplicated in the repo. Invoked by Netlify (via `netlify.toml`) and by the Makefile (`make deploy-frontend`).
 
+### Added (Phase 5 target)
+- New ADR: [`docs/decisions/0005-nemotron-3-nano-omni-as-phase-5-target.md`](docs/decisions/0005-nemotron-3-nano-omni-as-phase-5-target.md). Records the decision to target NVIDIA's Nemotron 3 Nano Omni (released April 28, 2026; open-weights 30B-A3B mixture-of-experts multimodal model) as Phase 5's fine-tuning base. The model's announcement does not enumerate language coverage; the corpus is structured to add Tamil literary understanding via fine-tuning.
+
+### Changed (roadmap sharpening)
+- `ROADMAP.md` Phase 2: replaced "self-hosted IndicConformer from scratch" with the specific deploy-ready VEXYL-STT path. The ASR comparison item now lists four named candidates (Soniox, vasista22/whisper-tamil-medium, VEXYL-STT/IndicConformer, and Nemotron's audio modality if applicable) instead of three generic ones.
+- `ROADMAP.md` Phase 3: quantization scope sharpened to TensorRT INT8 + FP8 + NVFP4 (Nemotron's first-class quantization options); HF dataset namespace explicitly named.
+- `ROADMAP.md` Phase 5: replaced the vague "NeMo fine-tuning experiments" with a specific named target (Nemotron 3 Nano Omni) and connected the voice/register hypothesis test to Nemotron's audio modality.
+- `docs/project-brief.md` §3 (multi-fold purpose, AI training data subsection): added a paragraph noting Nemotron 3 Nano Omni's release and the gap-filling fit for the corpus.
+
 ### Changed (attribution)
 - `README.md`, `annotator/SETUP.md`, `DEPLOY.md`, and `CITATION.cff` now name Vijayalakshmi Prasad as the project's classical-Tamil expert annotator. Previously these docs used "family member" or "Mom"; with the project moving toward public contribution, naming the person whose annotation work is the most distinctive content of the corpus is the more honest framing. `CITATION.cff` lists her as a second author so any citation of the dataset credits her work.
 
