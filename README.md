@@ -35,7 +35,7 @@ The Sentamizh Corpus is an open-source dataset of Classical Tamil literature des
 
 The corpus complements existing digitized resources for Classical Tamil — most prominently Project Madurai, the Tamil Virtual Academy, and Vaidehi Herbert's Sangam translations — by adding a structured, queryable, machine-readable layer on top of source material those projects have already preserved.
 
-- **Curated by:** Revathi Prasad (project lead, schema design, engineering) with classical-Tamil expert annotation by a family member.
+- **Curated by:** Revathi Prasad (project lead, schema design, engineering), with classical-Tamil expert annotation by Vijayalakshmi Prasad.
 - **Languages:** Classical Tamil (`ta`), Modern Tamil (`ta`), English (`en`).
 - **License:** Apache 2.0.
 - **Repository:** <https://github.com/indic-corpora/sentamizh-corpus>
@@ -166,7 +166,7 @@ Phase 2 will introduce LLM-assisted pre-annotation followed by expert review for
 
 #### Who are the annotators?
 
-One Classical-Tamil-fluent expert (a family member of the project lead). Phase 2 plans include additional Tamil-literary scholars; the schema's controlled vocabularies are scheduled for independent expert review before that step.
+One Classical-Tamil-fluent expert: Vijayalakshmi Prasad. Phase 2 plans include additional Tamil-literary scholars; the schema's controlled vocabularies are scheduled for independent expert review before that step.
 
 #### Personal and Sensitive Information
 
@@ -222,7 +222,7 @@ For the deploy pipeline (Netlify + GitHub Actions): [`DEPLOY.md`](DEPLOY.md).
 
 ## Dataset Card Authors
 
-Revathi Prasad, with annotation contribution from a family member fluent in Classical Tamil.
+Revathi Prasad, with annotation contribution from Vijayalakshmi Prasad.
 
 ## Dataset Card Contact
 

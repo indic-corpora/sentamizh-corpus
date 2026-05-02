@@ -1,6 +1,6 @@
 # Sentamizh Annotator — Phase 1 Setup
 
-This is a one-time setup. After it's done, your mom opens a link on her phone and starts annotating. Her work flows into a Google Sheet you control. Audio dictation goes through Soniox (a speech-to-text service). Per-word dictionary lookups go through Agarathi (Tamil dictionary API serving the University of Madras Tamil Lexicon).
+This is a one-time setup. After it's done, Vijayalakshmi Prasad — the project's classical-Tamil expert annotator — opens a link on her phone and starts annotating. Her work flows into a Google Sheet you control. Audio dictation goes through Soniox (a speech-to-text service). Per-word dictionary lookups go through Agarathi (Tamil dictionary API serving the University of Madras Tamil Lexicon).
 
 **Total time: about 25 minutes.**
 
@@ -31,7 +31,7 @@ Soniox provides the streaming speech-to-text for Tamil dictation. The choice of 
 
 ## Step 3 — Get an Agarathi dictionary API key
 
-Agarathi proxies six Tamil dictionaries including the University of Madras Tamil Lexicon. **$9.99/month** for 1,000 lookups/day — far more than your mom will use.
+Agarathi proxies six Tamil dictionaries including the University of Madras Tamil Lexicon. **$9.99/month** for 1,000 lookups/day — far more than Vijayalakshmi will use.
 
 1. Go to <https://agarathi.com/api/dictionary> and subscribe to the Basic plan.
 2. From the dashboard, copy your API key (used as the `X-Agarathi-Api-Secret` header).
@@ -60,7 +60,7 @@ In the Apps Script editor:
    - Property: `AGARATHI_API_KEY`, value: your Agarathi key
 4. Click **Save script properties**.
 
-These keys live server-side. Mom's phone never sees them — the script mints short-lived (10-minute) Soniox tokens on demand and proxies dictionary lookups so the keys stay private even though the page is public.
+These keys live server-side. Vijayalakshmi's phone never sees them — the script mints short-lived (10-minute) Soniox tokens on demand and proxies dictionary lookups so the keys stay private even though the page is public.
 
 ---
 
@@ -106,7 +106,7 @@ The `annotator/` folder needs to live on the web (over HTTPS — voice input req
 2. **Drag the entire `annotator/` folder** onto the drop zone.
 3. Wait a few seconds. You'll get a public URL like `https://radiant-puppy-12345.netlify.app`.
 4. (Optional) Click **Claim** to keep editing later — creates a free Netlify account.
-5. **That URL is what your mom opens on her phone.**
+5. **That URL is what Vijayalakshmi opens on her phone.**
 
 Alternatives if you already have GitHub or your own hosting: anything that serves static files over HTTPS works.
 
@@ -120,7 +120,7 @@ Alternatives if you already have GitHub or your own hosting: anything that serve
 4. In the verse text, long-press a word (e.g. கண்ணி). A 🔎 பொருள் pill appears above. Tap it. A dictionary popup should show definitions.
 5. Open your Google Sheet. The first text's tab should now have a row. Open `_telemetry` — you'll see rows for each call you made.
 
-If all three work, the system is ready for your mom.
+If all three work, the system is ready for Vijayalakshmi.
 
 ---
 
@@ -201,7 +201,7 @@ Annotations queue in `localStorage` and sync when online. Voice and dictionary l
 
 ## Automating the deploy loop
 
-After this manual run-through is working, you can switch to "edit → push → auto-deploy" by following [DEPLOY.md](../DEPLOY.md). It connects the GitHub repo to Netlify (frontend) and adds a small GitHub Actions workflow that runs `clasp push` + `clasp deploy` (backend). Both URLs stay the same; Mom's bookmark is unaffected.
+After this manual run-through is working, you can switch to "edit → push → auto-deploy" by following [DEPLOY.md](../DEPLOY.md). It connects the GitHub repo to Netlify (frontend) and adds a small GitHub Actions workflow that runs `clasp push` + `clasp deploy` (backend). Both URLs stay the same; Vijayalakshmi's bookmark is unaffected.
 
 ## What's next (Phase 2 and beyond)
 

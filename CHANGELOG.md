@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog v1.1.0](https://keepachangelog.com/en/1
 ### Added
 - `scripts/build_annotator_data.py` — populates `annotator/data/` from the canonical `data/processed/` files at deploy time, so the ~19 MB corpus is not duplicated in the repo. Invoked by Netlify (via `netlify.toml`) and by the Makefile (`make deploy-frontend`).
 
+### Changed (attribution)
+- `README.md`, `annotator/SETUP.md`, `DEPLOY.md`, and `CITATION.cff` now name Vijayalakshmi Prasad as the project's classical-Tamil expert annotator. Previously these docs used "family member" or "Mom"; with the project moving toward public contribution, naming the person whose annotation work is the most distinctive content of the corpus is the more honest framing. `CITATION.cff` lists her as a second author so any citation of the dataset credits her work.
+
 ### Changed (honesty pass: "trilingual" and "deeply annotated")
 - `README.md`, `CITATION.cff`, `schemas/sentamizh_schema.json`, `docs/project-brief.md`, and `scripts/annotate_entries.py` no longer describe the corpus as "trilingual" or "deeply annotated" in the present tense. The schema is *designed* for trilingual representation, but Modern Tamil coverage is currently 0% and English coverage is ~8% (Kuruntokai and Natrinai only); the schema has 22 interpretive fields that are largely null at this stage. The revised wording frames "trilingual" as design intent and points readers to the current per-language and per-field coverage in Dataset Structure and Bias/Risks/Limitations.
 - Filled in placeholder `<owner>/sentamizh-corpus` URLs in `README.md`, `CITATION.cff`, and `SECURITY.md` with the actual `indic-corpora/sentamizh-corpus` GitHub URL. Added a Hugging Face organization link to `README.md`.

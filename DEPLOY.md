@@ -11,7 +11,7 @@ After the one-time setup below, the iterative loop is just:
 edit → git commit → git push → test on phone
 ```
 
-Both URLs stay the same across deploys (Netlify reuses the site URL; clasp updates an existing deployment ID), so Mom never has to update her bookmark.
+Both URLs stay the same across deploys (Netlify reuses the site URL; clasp updates an existing deployment ID), so Vijayalakshmi never has to update her bookmark.
 
 ---
 
@@ -154,7 +154,7 @@ The `CLASPRC_JSON` secret is malformed or missing. Re-copy the entire output of 
 **`clasp deploy` creates a NEW deployment instead of updating the existing one.**
 You forgot `--deploymentId` (or `APPS_SCRIPT_DEPLOYMENT_ID` is unset in GitHub Actions). The CLI silently creates a new versioned deployment if no ID is passed, which gives you a fresh URL — not what you want. Always pass `--deploymentId`.
 
-**Mom's bookmark suddenly stops working after a deploy.**
+**Vijayalakshmi's bookmark suddenly stops working after a deploy.**
 You probably created a new Apps Script deployment (see above) and didn't update `CONFIG.APPS_SCRIPT_URL` in `annotator/index.html`. Easiest fix: in Apps Script editor, **Deploy → Manage deployments**, delete the new one, keep the original. The original URL goes back to working.
 
 **Soniox or Agarathi key seems to have disappeared after `clasp push`.**
@@ -192,4 +192,4 @@ For an instant rollback without git, in the Apps Script editor: **Deploy → Man
 
 - **Adding API keys.** `SONIOX_API_KEY` and `AGARATHI_API_KEY` live in Apps Script Script Properties, not in code. Set them once in Apps Script editor → ⚙️ → Script Properties; clasp doesn't touch them.
 - **Connecting GitHub to Netlify.** One-time UI step. Once done, every push triggers a deploy.
-- **Telling Mom about a new feature.** No automation can replace "hey, try the new save toast."
+- **Telling Vijayalakshmi about a new feature.** No automation can replace "hey, try the new save toast."

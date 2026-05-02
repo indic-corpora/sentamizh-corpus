@@ -13,6 +13,8 @@ authors:
   - family-names: Prasad
     given-names: Revathi
     email: prasadrevathi.2021@gmail.com
+  - family-names: Prasad
+    given-names: Vijayalakshmi
 license: Apache-2.0
 repository-code: "https://github.com/indic-corpora/sentamizh-corpus"
 keywords:
