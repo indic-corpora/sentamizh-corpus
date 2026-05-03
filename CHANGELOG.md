@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog v1.1.0](https://keepachangelog.com/en/1
 ### Added
 - `scripts/build_annotator_data.py` — populates `annotator/data/` from the canonical `data/processed/` files at deploy time, so the ~19 MB corpus is not duplicated in the repo. Invoked by Netlify (via `netlify.toml`) and by the Makefile (`make deploy-frontend`).
 
+### Changed (dictionary backend)
+- `annotator/google_apps_script.gs`: dictionary lookup now queries Tamil Wiktionary (`ta.wiktionary.org`) at runtime instead of Agarathi. No API key required. Same `/lookup` response shape as before, so the frontend popup is unchanged. Reasoning and Phase 2 plan to add a self-hosted UMTL backend recorded in [ADR 0006](docs/decisions/0006-tamil-wiktionary-for-dictionary-lookup.md).
+- `annotator/SETUP.md`: removed the Agarathi subscription step (Step 3); only `SONIOX_API_KEY` is required in Script Properties now.
+- `ROADMAP.md` Phase 2: added a self-hosted UMTL dictionary backend item — OCR the public-domain Internet Archive scans, publish under `indic-corpora`, add as a second backend behind the same `/lookup` proxy. Phase 1 uses Wiktionary; Phase 2 will benchmark UMTL vs Wiktionary as a project publication.
+
 ### Added (Phase 5 target)
 - New ADR: [`docs/decisions/0005-nemotron-3-nano-omni-as-phase-5-target.md`](docs/decisions/0005-nemotron-3-nano-omni-as-phase-5-target.md). Records the decision to target NVIDIA's Nemotron 3 Nano Omni (released April 28, 2026; open-weights 30B-A3B mixture-of-experts multimodal model) as Phase 5's fine-tuning base. The model's announcement does not enumerate language coverage; the corpus is structured to add Tamil literary understanding via fine-tuning.
 

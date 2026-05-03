@@ -8,7 +8,8 @@
  * Endpoints (all under one Web App URL):
  *
  *   POST  body:{action:"transcribe-token"}      → mint a Soniox temp API key
- *   POST  body:{action:"lookup", text:string}    → Tamil dictionary lookup (Agarathi)
+ *   POST  body:{action:"lookup", text:string}    → Tamil dictionary lookup
+ *                                                  (Tamil Wiktionary, see ADR 0006)
  *   POST  body:{action:"log", ...telemetry}      → append a telemetry row
  *   POST  body:{verse_id, source_text, ...}      → upsert a verse annotation
  *   GET   ?text=<corpus_id>                      → list saved annotations for a corpus
@@ -17,16 +18,17 @@
  *   - All Tamil-text payloads use POST (URL length truncation prevented).
  *   - Audio never touches Apps Script. The browser streams directly to
  *     Soniox via WebSocket using a short-lived temporary API key.
- *   - The dictionary lookup proxies Agarathi's REST API; sandhi splitting
- *     is deferred to Phase 1.5 (we look up the user's selection as-is).
+ *   - Dictionary lookup proxies the Tamil Wiktionary `extracts` API;
+ *     no API key required. Phase 2 plan: add a self-hosted UMTL backend
+ *     behind the same /lookup endpoint (ADR 0006).
  *   - Telemetry rows go to a dedicated `_telemetry` tab, async-safe.
  *
  * Setup:
  *   In Project Settings → Script Properties, set:
  *     SONIOX_API_KEY    = sk_live_xxxx (from soniox.com dashboard)
- *     AGARATHI_API_KEY  = your X-Agarathi-Api-Secret value
  *
- *   These never reach the browser.
+ *   No dictionary key is required — Tamil Wiktionary is queried without
+ *   authentication. The Soniox key never reaches the browser.
  */
 
 const ANNOTATION_COLUMNS = [
@@ -132,30 +134,45 @@ function handleTranscribeToken(body) {
 }
 
 
-// ─── Tamil dictionary lookup (Agarathi → UMTL + others) ───────────────────
+// ─── Tamil dictionary lookup (Tamil Wiktionary at runtime) ────────────────
 
+/**
+ * Looks up a Tamil word in Tamil Wiktionary (ta.wiktionary.org) via the
+ * MediaWiki extracts API. Returns the same {form, lemma, definitions[],
+ * source} shape the frontend already consumes, so the UI is unchanged.
+ *
+ * This is Phase 1's dictionary-lookup backend, decided in ADR 0006.
+ * Phase 2 plans to add a self-hosted UMTL backend behind the same
+ * /lookup endpoint, so swapping providers is a server-side change only.
+ */
 function handleLookup(body) {
-  const apiKey = PropertiesService.getScriptProperties().getProperty('AGARATHI_API_KEY');
-  if (!apiKey) {
-    return { error: 'AGARATHI_API_KEY not configured', provider: 'agarathi' };
-  }
   const text = String(body.text || '').trim();
-  if (!text) return { error: 'text is required', provider: 'agarathi' };
+  if (!text) return { error: 'text is required', provider: 'wiktionary' };
 
   const start = Date.now();
-  const res = UrlFetchApp.fetch('https://api.agarathi.com/dictionary/search', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { 'X-Agarathi-Api-Secret': apiKey },
-    payload: JSON.stringify({ word: text }),
+  const url = 'https://ta.wiktionary.org/w/api.php?' +
+    'action=query' +
+    '&prop=extracts' +
+    '&explaintext=1' +
+    '&titles=' + encodeURIComponent(text) +
+    '&format=json' +
+    '&redirects=1';
+
+  const res = UrlFetchApp.fetch(url, {
+    method: 'get',
     muteHttpExceptions: true,
+    headers: {
+      // Wikimedia requests a User-Agent that identifies the consumer so
+      // they can contact us if our usage causes problems.
+      'User-Agent': 'SentamizhCorpus/0.1 (+https://github.com/indic-corpora/sentamizh-corpus)',
+    },
   });
   const latency = Date.now() - start;
 
   if (res.getResponseCode() >= 300) {
     return {
-      error: 'agarathi failed: ' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 200),
-      provider: 'agarathi',
+      error: 'wiktionary failed: ' + res.getResponseCode(),
+      provider: 'wiktionary',
       latency_ms: latency,
     };
   }
@@ -163,53 +180,87 @@ function handleLookup(body) {
   let data;
   try { data = JSON.parse(res.getContentText()); }
   catch (err) {
-    return { error: 'agarathi returned non-JSON', provider: 'agarathi', latency_ms: latency };
+    return { error: 'wiktionary returned non-JSON', provider: 'wiktionary', latency_ms: latency };
   }
 
-  // Normalize Agarathi's response into a consistent shape: an array of
-  // {form, lemma, definitions[], source} objects. Agarathi structures
-  // entries by source dictionary; we flatten and surface UMTL first.
-  // Each Agarathi entry is shaped {dictionary, word, description}; the
-  // definition text lives in `description` (a single string). A few
-  // dictionaries instead expose meanings/meaning/definitions arrays, so
-  // we fall back to those for forward compatibility.
-  const entries = [];
-  const contents = (data && data.contents) || [];
-  contents.forEach((entry) => {
-    if (!entry) return;
-    const source = entry.dictionary || entry.source || 'unknown';
-    const definitions = [];
-    if (typeof entry.description === 'string' && entry.description.trim()) {
-      definitions.push(entry.description.trim());
-    }
-    const meanings = entry.meanings || entry.meaning || entry.definitions || [];
-    if (Array.isArray(meanings)) {
-      meanings.forEach((m) => {
-        if (typeof m === 'string' && m.trim()) definitions.push(m.trim());
-        else if (m && (m.text || m.meaning)) definitions.push(m.text || m.meaning);
-      });
-    } else if (typeof meanings === 'string' && meanings.trim()) {
-      definitions.push(meanings.trim());
-    }
-    entries.push({
-      form: entry.word || text,
-      lemma: entry.lemma || entry.headword || entry.word || text,
-      definitions: definitions,
-      source: source,
-    });
-  });
-  // Stable order: UMTL first, then others.
-  entries.sort((a, b) => {
-    const score = (s) => /madras|umtl/i.test(String(s)) ? 0 : 1;
-    return score(a.source) - score(b.source);
-  });
+  // The extracts API shape is:
+  //   { query: { pages: { "<pageid>": { title, extract } } } }
+  // For missing words it's:
+  //   { query: { pages: { "-1": { missing: "" } } } }
+  const pages = (data && data.query && data.query.pages) || {};
+  const pageKey = Object.keys(pages)[0];
+  const page = pages[pageKey] || {};
+
+  if (page.missing !== undefined || !page.extract) {
+    // Word not found in Tamil Wiktionary. Frontend renders this as
+    // "இந்த வார்த்தை அகராதியில் இல்லை" (not in dictionary).
+    return {
+      text: text,
+      entries: [],
+      provider: 'wiktionary',
+      latency_ms: latency,
+    };
+  }
+
+  const definitions = parseWiktionaryExtract(page.extract);
+  if (!definitions.length) {
+    return {
+      text: text,
+      entries: [],
+      provider: 'wiktionary',
+      latency_ms: latency,
+    };
+  }
 
   return {
     text: text,
-    entries: entries,
-    provider: 'agarathi',
+    entries: [{
+      form: text,
+      lemma: text,
+      definitions: definitions,
+      source: 'Tamil Wiktionary',
+    }],
+    provider: 'wiktionary',
     latency_ms: latency,
   };
+}
+
+/**
+ * Splits a Wiktionary "extract" plain-text response into a list of
+ * candidate definition lines. Returns at most 5 lines, each between
+ * 5 and 500 characters. Defensive against extracts that have section
+ * headings, blank lines, or extremely long single paragraphs.
+ */
+function parseWiktionaryExtract(extract) {
+  const text = String(extract || '').trim();
+  if (!text) return [];
+
+  // Split on newlines first; many extracts come as one definition per line
+  // or grouped under section headings.
+  const lines = text.split(/\n+/)
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return s.length > 0; });
+
+  var defs = [];
+  for (var i = 0; i < lines.length && defs.length < 5; i++) {
+    var line = lines[i];
+    // Skip section markers and very short headings like "தமிழ்" or "Tamil"
+    if (line.length < 5) continue;
+    // Skip lines that look like pure heading markers
+    if (/^[=#\-\s]+$/.test(line)) continue;
+    // Skip overly long walls of text — probably etymology paragraphs
+    if (line.length > 500) {
+      defs.push(line.substring(0, 280).trim() + '…');
+      continue;
+    }
+    defs.push(line);
+  }
+
+  // If splitting by line yielded nothing usable, fall back to first 280 chars
+  if (defs.length === 0) {
+    defs.push(text.substring(0, 280).trim());
+  }
+  return defs;
 }
 
 

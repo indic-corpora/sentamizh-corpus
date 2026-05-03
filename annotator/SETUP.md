@@ -29,14 +29,11 @@ Soniox provides the streaming speech-to-text for Tamil dictation. The choice of 
 
 ---
 
-## Step 3 — Get an Agarathi dictionary API key
+## Step 3 — (No dictionary signup needed)
 
-Agarathi proxies six Tamil dictionaries including the University of Madras Tamil Lexicon. **$9.99/month** for 1,000 lookups/day — far more than Vijayalakshmi will use.
+Phase 1's dictionary lookup uses [Tamil Wiktionary](https://ta.wiktionary.org/) at runtime. No API key, no signup, no captcha. The Apps Script proxy queries Wiktionary's public MediaWiki API directly when Vijayalakshmi long-presses a word.
 
-1. Go to <https://agarathi.com/api/dictionary> and subscribe to the Basic plan.
-2. From the dashboard, copy your API key (used as the `X-Agarathi-Api-Secret` header).
-
-(If you'd rather skip Agarathi for now: the annotator will still work — dictionary lookup just won't return results. You can add the key later.)
+The choice and the Phase 2 plan to add a self-hosted UMTL backend are documented in [`docs/decisions/0006-tamil-wiktionary-for-dictionary-lookup.md`](../docs/decisions/0006-tamil-wiktionary-for-dictionary-lookup.md). If a previous version of this project used Agarathi, that integration has been retired; you don't need to subscribe to Agarathi.
 
 ---
 
@@ -49,18 +46,17 @@ Agarathi proxies six Tamil dictionaries including the University of Madras Tamil
 
 ---
 
-## Step 5 — Store both API keys in Script Properties
+## Step 5 — Store the Soniox API key in Script Properties
 
 In the Apps Script editor:
 
 1. Click the gear icon (⚙️) on the left rail → **Project Settings**.
 2. Scroll to **Script Properties** → click **Add script property**.
-3. Add two properties:
+3. Add this property:
    - Property: `SONIOX_API_KEY`, value: your Soniox `sk_…` key
-   - Property: `AGARATHI_API_KEY`, value: your Agarathi key
 4. Click **Save script properties**.
 
-These keys live server-side. Vijayalakshmi's phone never sees them — the script mints short-lived (10-minute) Soniox tokens on demand and proxies dictionary lookups so the keys stay private even though the page is public.
+The Soniox key lives server-side. Vijayalakshmi's phone never sees it — the script mints short-lived (10-minute) Soniox tokens on demand. Dictionary lookups go to Tamil Wiktionary's public API and don't require any key.
 
 ---
 
@@ -181,7 +177,7 @@ The page must be served over HTTPS (Netlify gives you that). On `file://` or ins
 Either `SONIOX_API_KEY` isn't set in Apps Script Script Properties, or the deployment isn't set to "Anyone" access. Check Step 5 and Step 6.
 
 **Dictionary popup says "அகராதி அணுக முடியவில்லை" (couldn't reach dictionary).**
-Likely `AGARATHI_API_KEY` is missing or wrong, or you've hit the daily rate limit (1,000/day on the Basic plan).
+Tamil Wiktionary's API may be temporarily unreachable or rate-limited. Try again in a few minutes; usage is unauthenticated and free, so persistent errors usually indicate a transient network or Wikimedia issue. If a specific word reliably returns "not in dictionary," it may simply not have a Tamil Wiktionary entry.
 
 **The Sheet isn't updating.**
 - Confirm the deployment is set to **Anyone** access (Step 6).
