@@ -76,6 +76,24 @@ Open the Web App URL on your phone and make sure it still works (mic / lookup / 
 > **Why two steps (`clasp version` + `clasp redeploy -V`) instead of one `clasp deploy`?**
 > Letting clasp infer the version on a redeploy is the root cause of clasp issue #63 — the inferred-version path can silently shadow into a fresh deployment, which gives you a new `/exec` URL and breaks bookmarks. Creating the version explicitly and binding it with `-V` avoids that.
 
+#### One-time OAuth consent (this is the step that always trips us up)
+
+`clasp push` uploads code. `clasp deploy` / `clasp redeploy` make it live. **Neither of them prompts for OAuth consent.** Consent only happens when a function runs from the editor with a logged-in user. The web app runs as `USER_DEPLOYING` (the account whose `~/.clasprc.json` we used), and any scope `USER_DEPLOYING` hasn't consented to throws a runtime error like:
+
+```
+Exception: You do not have permission to call UrlFetchApp.fetch.
+Required permissions: https://www.googleapis.com/auth/script.external_request
+```
+
+So after the first push, run the `authorize()` helper once:
+
+1. Apps Script editor → in the function dropdown at the top of the editor, select **`authorize`**.
+2. Click **Run**.
+3. Apps Script shows a "Authorization required" dialog → click **Review permissions** → pick the deploying Google account → click **Allow**.
+4. The function runs (its only job is to touch every scoped API to trigger consent on each one). You'll see a success log; the function itself returns nothing.
+
+Re-run `authorize()` whenever you change the OAuth scopes in `annotator/appsscript.json` — the consent grant covers only the scopes consented to at run time, so adding a new scope without re-consenting will fail at runtime in production.
+
 ### Step 4 — Wire up GitHub → Netlify (frontend auto-deploy)
 
 1. Push the repo to GitHub if you haven't already (`gh repo create sentamizh-corpus --public --source=. --push`).
@@ -174,6 +192,9 @@ Apps Script's `appsscript.json` lists OAuth scopes. If the script's actual code 
 **Netlify build fails with "publish directory does not exist."**
 `netlify.toml` says `publish = "annotator"`. Check that the `annotator/` folder is actually committed (`git ls-tree HEAD annotator/`). If not, `git add annotator && git commit && git push`.
 
+**Netlify deploy fails with an empty "Loading" log and no error output.**
+The build command runs `python3 scripts/build_annotator_data.py` but Netlify's build image doesn't have `python3` on PATH unless you tell it to. `netlify.toml`'s `[build.environment] PYTHON_VERSION = "3.11"` block fixes this — without it, the build dies before producing any log lines. If the block is present and you still see this, bump to a different supported Python version (Netlify supports 3.8 through 3.11 currently).
+
 **GitHub Actions: `clasp` fails with "Could not read API credentials."**
 The `CLASPRC_JSON` secret is malformed or missing. Re-copy the entire output of `cat ~/.clasprc.json` (it's a single-line JSON blob; don't add quotes around it in the GitHub UI).
 
@@ -208,6 +229,9 @@ After cleanup, the surviving deployment may still be in a corrupted state where 
 
 **Vijayalakshmi's bookmark suddenly stops working after a deploy.**
 Most likely a duplicate deployment was created and the live `/exec` URL got reassigned (see above). Run `clasp deployments`, undeploy the duplicate, and confirm the surviving deployment's URL matches `CONFIG.APPS_SCRIPT_URL` in `annotator/index.html`.
+
+**Lookup or transcription fails with `You do not have permission to call UrlFetchApp.fetch` (or any other scope).**
+The deploying user hasn't consented to that scope yet. `clasp push` and `clasp deploy` don't trigger OAuth consent — only running a function from the editor does. Open the Apps Script editor, select **`authorize`** from the function dropdown, click **Run**, grant permissions when prompted. The error stops immediately for all subsequent web app calls. Re-run `authorize()` any time you add a new scope to `annotator/appsscript.json`.
 
 **The `Guard the web app access setting` step in CI fails.**
 Someone edited `annotator/appsscript.json` and dropped or changed the `webapp.access` or `webapp.executeAs` field. The guard fails fast so we don't ship a deploy that would silently revert the live deployment to "Only myself" and break access for annotators. Restore the manifest:

@@ -395,3 +395,40 @@ function jsonResponse(obj) {
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
+
+// ─── One-time authorization ───────────────────────────────────────────────
+
+/**
+ * Run this ONCE from the Apps Script editor (function dropdown → authorize →
+ * Run) any time the manifest's scopes change. It touches each scoped API so
+ * Apps Script prompts for OAuth consent on all of them at once.
+ *
+ * Why it exists: clasp push / clasp deploy do not trigger consent. The web
+ * app runs as USER_DEPLOYING, and if USER_DEPLOYING has never authorized a
+ * scope, calls into that scope at runtime fail with:
+ *
+ *   "You do not have permission to call UrlFetchApp.fetch.
+ *    Required permissions: https://www.googleapis.com/auth/script.external_request"
+ *
+ * Running this function from the editor is the only way to grant consent.
+ * No-op once consent is granted (calls are cheap, results are discarded).
+ *
+ * Add a touch for any new scope here when the manifest grows.
+ */
+function authorize() {
+  // script.external_request — needed by handleLookup (Wiktionary) and
+  // handleTranscribeToken (Soniox).
+  UrlFetchApp.fetch('https://ta.wiktionary.org/w/api.php?action=query&format=json&meta=siteinfo', {
+    muteHttpExceptions: true,
+  });
+
+  // spreadsheets.currentonly — needed by handleAnnotation, handleLog, doGet.
+  SpreadsheetApp.getActiveSpreadsheet().getName();
+
+  // script.scriptapp — needed if we ever call ScriptApp.getOAuthToken() or
+  // similar. Currently unused, but the manifest declares it.
+  ScriptApp.getScriptId();
+
+  Logger.log('authorize(): all manifest scopes consented. Live deploys can now call UrlFetchApp + SpreadsheetApp.');
+}

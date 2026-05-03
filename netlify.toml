@@ -16,6 +16,13 @@
   # ~20 MB of duplicated data in the repo.
   command = "python3 scripts/build_annotator_data.py"
 
+[build.environment]
+  # Pin Python so Netlify provisions a build image with python3 on PATH.
+  # Without this, the build command fails before producing any log output —
+  # the deploy "Loading" log we saw on May 2 was the symptom. Any 3.8+ works
+  # for build_annotator_data.py since it only uses stdlib.
+  PYTHON_VERSION = "3.11"
+
 # ── Cache policy ──────────────────────────────────────────────────────────
 # Verse JSONs (Akananuru.json, Thevaram.json, etc.) are large but rarely
 # change. Cache them for a day. The manifest changes more often (when texts

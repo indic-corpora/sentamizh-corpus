@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog v1.1.0](https://keepachangelog.com/en/1
 
 ## [Unreleased]
 
+### Fixed (frontend build)
+- `netlify.toml`: pinned `PYTHON_VERSION = "3.11"` in `[build.environment]`. Without this, recent Netlify build images don't have `python3` on PATH, so `python3 scripts/build_annotator_data.py` fails before producing any log output (we saw a "Loading" log with no content on May 2). The script only uses stdlib so any 3.8+ would work; 3.11 is the safe default.
+
+### Added (one-time OAuth consent helper)
+- `annotator/google_apps_script.gs`: new `authorize()` function that calls each scoped API (`UrlFetchApp`, `SpreadsheetApp`, `ScriptApp`) once. Running it from the editor (function dropdown → `authorize` → Run) triggers Apps Script's OAuth consent flow for every scope the manifest declares, in a single deliberate step. Without this, `clasp push` and `clasp deploy` succeed but the live web app fails at runtime with `You do not have permission to call UrlFetchApp.fetch` whenever it tries to reach Wiktionary or Soniox — because consent is only granted when a function runs from the editor, never from CI. We hit exactly this on May 2: GET annotation reads worked (spreadsheet scope was already consented because the script is bound to a Sheet), but POST `/lookup` failed silently because the `script.external_request` scope had never been consented to.
+- `DEPLOY.md`: new "One-time OAuth consent" subsection in Step 3 documents the helper. Troubleshooting section now lists the `UrlFetchApp.fetch permission` error with the same fix.
+
 ### Changed (backend auto-deploy hardening)
 - `.github/workflows/deploy-backend.yml`, `Makefile`, `DEPLOY.md`: backend deploy upgraded from `@google/clasp@2.4.2` to `@google/clasp@3.3.0`, and the single `clasp deploy --deploymentId` step replaced with three explicit steps: `clasp push --force` → `clasp version` (creates a new versioned snapshot, captures the version number) → `clasp redeploy $DEPLOYMENT_ID -V $VERSION` (binds the deployment to that exact version).
   - Why: the old single-step path is the root cause of [clasp issue #63](https://github.com/google/clasp/issues/63) — without an explicit `-V`, redeploys can silently shadow into a fresh deployment under certain Apps Script project states, which produces a new `/exec` URL and breaks any device with a bookmark to the annotator. We hit this twice on May 2 before tracking it down. Pinning the version eliminates the ambiguity.
