@@ -114,10 +114,11 @@ GitHub needs two secrets: your clasp credentials, and your deployment ID.
    ```
    Copy the entire output (it's a JSON blob).
 2. In GitHub: repo → **Settings → Secrets and variables → Actions → New repository secret**.
-3. Add two secrets:
+3. Add three secrets:
    - **Name:** `CLASPRC_JSON`. **Value:** the JSON blob from step 1.
    - **Name:** `APPS_SCRIPT_DEPLOYMENT_ID`. **Value:** the deployment ID from Step 2.
-4. Push a small change to `annotator/google_apps_script.gs` (or trigger the workflow manually from the Actions tab via "Run workflow"). Watch the Actions tab — the workflow should run, push, and deploy in under a minute.
+   - **Name:** `WEB_APP_URL`. **Value:** the live `/exec` URL from Step 3 (e.g. `https://script.google.com/macros/s/AKfy.../exec`). This is optional but strongly recommended — the workflow uses it to probe the live deployment after each redeploy and fail the build if Apps Script silently reset the deployment's access setting (a known quirk that has bitten this project multiple times). Without this secret, you find out access reverted only when the annotator's popover stops working.
+4. Push a small change to `annotator/google_apps_script.gs` (or trigger the workflow manually from the Actions tab via "Run workflow"). Watch the Actions tab — the workflow should run, push, deploy, and probe in under a minute.
 
 If the workflow logs say `clasp status` succeeded but `clasp push` failed, you most likely have a manifest scope mismatch — see Troubleshooting.
 

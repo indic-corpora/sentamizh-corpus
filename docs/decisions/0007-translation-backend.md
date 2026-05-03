@@ -15,7 +15,7 @@ A "suggest translation" feature that drafts a starting paraphrase the annotator 
 
 ## Decision
 
-Phase 1 ships a **`/translate`** proxy endpoint on Apps Script that calls **NVIDIA NIM** (`integrate.api.nvidia.com`) with **Nemotron 3 Nano Omni** as the default model. The model identifier is read from a Script Property (`TRANSLATION_MODEL`) so swapping to a different model is a property change, not a code change.
+Phase 1 ships a **`/translate`** proxy endpoint on Apps Script that calls **NVIDIA NIM** (`integrate.api.nvidia.com`) with **Nemotron 3 Nano 30B-A3B** (`nvidia/nemotron-3-nano-30b-a3b`) as the default model — the text-only variant of the Nemotron 3 Nano family. The Omni multimodal variant (`nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`) is overkill for text translation; we reserve it for the Phase 5 voice/register fine-tune ([ADR 0005](0005-nemotron-3-nano-omni-as-phase-5-target.md)). The model identifier is read from a Script Property (`TRANSLATION_MODEL`) so swapping to a different model is a property change, not a code change.
 
 The frontend renders a "Suggest translation" button on the `modern_tamil` and `english` fields. Tapping it POSTs to `/translate` with a payload that includes:
 
@@ -70,7 +70,7 @@ The annotator does not see this complexity — she sees a "Suggest translation" 
 
 - **Backend** (`annotator/google_apps_script.gs`):
   - New `handleTranslate(body)` function. POST `action=translate` is dispatched to it.
-  - Reads `NVIDIA_API_KEY` and `TRANSLATION_MODEL` (default `nvidia/nemotron-3-nano-omni`) from Script Properties.
+  - Reads `NVIDIA_API_KEY` and `TRANSLATION_MODEL` (default `nvidia/nemotron-3-nano-30b-a3b`) from Script Properties.
   - Builds an OpenAI-compatible chat completion request to `https://integrate.api.nvidia.com/v1/chat/completions`.
   - System prompt explicitly anchors the LLM in the supplied Wiktionary definitions and the annotator's modern Tamil paraphrase, in that order of trust.
   - Telemetry: logs latency, model, token cost estimate to the Sheet's `_telemetry` tab.

@@ -148,3 +148,43 @@ jobs:
           clasp redeploy "$DEPLOYMENT_ID" \
             -V "$VERSION" \
             -d "ci $(date -u +%Y-%m-%dT%H:%MZ) ${GITHUB_SHA::7}"
+
+      - name: Probe live deployment access (must serve "Anyone")
+        # Apps Script's `clasp redeploy` empirically resets a deployment's
+        # "Who has access" setting to something other than "Anyone" on some
+        # project states, despite the manifest declaring access: ANYONE.
+        # When this happens, the live /exec URL returns 401 (no CORS headers)
+        # and the browser annotator silently fails on every fetch.
+        #
+        # We probe the live URL with an unauthenticated GET. If it doesn't
+        # return JSON, fail the build immediately with a clear remediation
+        # so the operator knows to flip access in Manage Deployments before
+        # the annotator tries to use the broken deployment.
+        #
+        # The probe URL is the optional WEB_APP_URL secret. If not configured,
+        # skip with a notice — the probe is best-effort and only runs when the
+        # operator has wired the URL up.
+        if: steps.check.outputs.configured == 'true'
+        env:
+          WEB_APP_URL: ${{ secrets.WEB_APP_URL }}
+        run: |
+          if [ -z "$WEB_APP_URL" ]; then
+            echo "::notice::Post-deploy probe skipped: WEB_APP_URL secret not set. Add it to enable automatic detection of access-setting reversion. See DEPLOY.md."
+            exit 0
+          fi
+          echo "Probing $WEB_APP_URL?text=__probe__ ..."
+          # -L follow redirects, -s silent, -o capture body, -w get status code.
+          STATUS=$(curl -L -s -o /tmp/probe_body -w '%{http_code}' "$WEB_APP_URL?text=__probe__")
+          HEAD_BYTES=$(head -c 80 /tmp/probe_body | tr -d '\0')
+          echo "HTTP status: $STATUS"
+          echo "First 80 bytes of body: $HEAD_BYTES"
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Live deployment returned HTTP $STATUS instead of 200. Likely the 'Who has access' setting reverted to non-Anyone. Open the Apps Script editor → Deploy → Manage deployments → edit the active deployment → Who has access: Anyone → Deploy. Then re-run this workflow."
+            exit 1
+          fi
+          # 200 alone isn't enough — a sign-in page is also 200. Check for JSON.
+          if ! head -c 80 /tmp/probe_body | grep -q '^[[:space:]]*[{[]'; then
+            echo "::error::Live deployment returned 200 but the body is not JSON (likely a sign-in HTML page). The deployment access setting is probably 'Anyone with Google account' instead of 'Anyone'. Open the Apps Script editor → Deploy → Manage deployments → edit → Who has access: Anyone → Deploy. Then re-run this workflow."
+            exit 1
+          fi
+          echo "Live deployment probe OK: returned JSON response."

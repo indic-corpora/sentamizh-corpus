@@ -33,7 +33,7 @@
  *   In Project Settings → Script Properties, set:
  *     SONIOX_API_KEY      = sk_live_xxxx (from soniox.com dashboard)
  *     NVIDIA_API_KEY      = nvapi-xxxx (from build.nvidia.com)
- *     TRANSLATION_MODEL   = (optional) defaults to "nvidia/nemotron-3-nano-omni"
+ *     TRANSLATION_MODEL   = (optional) defaults to "nvidia/nemotron-3-nano-30b-a3b"
  *
  *   No dictionary key is required — Tamil Wiktionary is queried without
  *   authentication. API keys never reach the browser.
@@ -325,7 +325,11 @@ function handleTranslate(body) {
   if (!apiKey) {
     return { error: 'NVIDIA_API_KEY not configured in Script Properties', provider: 'nvidia-nim' };
   }
-  const model = props.getProperty('TRANSLATION_MODEL') || 'nvidia/nemotron-3-nano-omni';
+  // Default to the text-only Nano variant for Phase 1 translation. Omni
+  // (nvidia/nemotron-3-nano-omni-30b-a3b-reasoning) is the multimodal
+  // version — overkill for text translation, slower, more expensive. We
+  // reserve it for the Phase 5 voice/register fine-tune (ADR 0005).
+  const model = props.getProperty('TRANSLATION_MODEL') || 'nvidia/nemotron-3-nano-30b-a3b';
 
   const modernTamil = body.modern_tamil ? String(body.modern_tamil).trim() : '';
   const english = body.english ? String(body.english).trim() : '';
