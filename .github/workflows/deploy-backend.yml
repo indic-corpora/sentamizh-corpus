@@ -3,6 +3,22 @@ name: Deploy Apps Script backend
 # Runs on every push to main that touches the backend script or its manifest.
 # The frontend (annotator/index.html) deploys via Netlify on its own — see
 # netlify.toml.
+#
+# Why this workflow looks the way it does:
+#   1. clasp 3.x splits the old `deploy` command into `create-deployment` and
+#      `redeploy`. We use `redeploy` and pass the existing deployment ID so
+#      the /exec URL stays stable — no broken bookmarks for annotators.
+#   2. We create the version EXPLICITLY (clasp version) and pass that number
+#      to redeploy via -V. Letting clasp infer the version is the root cause
+#      of duplicate deployments under clasp issue #63 — even with --deploymentId
+#      set, the inferred-version path can silently shadow into a fresh
+#      deployment. Explicit -V eliminates this.
+#   3. The manifest guard runs FIRST. The web app's "Anyone" access setting
+#      lives in annotator/appsscript.json and travels with the version. If a
+#      careless edit drops the webapp.access field, every redeploy from then on
+#      reverts the live deployment to "Only myself" — silently — and we'd lose
+#      access on phones until someone notices and fixes it via the UI. The
+#      guard fails the build before any of that can happen.
 
 on:
   push:
@@ -42,20 +58,53 @@ jobs:
         if: steps.check.outputs.configured == 'true'
         uses: actions/checkout@v4
 
+      - name: Guard the web app access setting
+        # The "Anyone" access setting persists across redeploys ONLY because
+        # the manifest declares it. If someone edits annotator/appsscript.json
+        # and drops the webapp.access field, the next redeploy will silently
+        # revert the live deployment to "Only myself" and the annotator URL
+        # will stop working on phones. Catch that here, before deploy.
+        if: steps.check.outputs.configured == 'true'
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          with open('annotator/appsscript.json') as f:
+              manifest = json.load(f)
+          webapp = manifest.get('webapp') or {}
+          access = webapp.get('access')
+          execute_as = webapp.get('executeAs')
+          problems = []
+          if access != 'ANYONE':
+              problems.append(f'webapp.access must be "ANYONE", got {access!r}')
+          if execute_as != 'USER_DEPLOYING':
+              problems.append(f'webapp.executeAs must be "USER_DEPLOYING", got {execute_as!r}')
+          if problems:
+              for p in problems:
+                  print(f'::error file=annotator/appsscript.json::{p}')
+              sys.exit(1)
+          print('Manifest guard OK: webapp.access=ANYONE, executeAs=USER_DEPLOYING')
+          PY
+
       - name: Set up Node.js
         if: steps.check.outputs.configured == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install clasp
+      - name: Install clasp 3.3.0
+        # Pinned. clasp 3.x split `deploy` into create-deployment / redeploy
+        # and expects explicit -V on redeploys (see workflow header comment).
+        # Don't bump to "latest" without re-verifying the redeploy contract;
+        # see clasp issue #63.
         if: steps.check.outputs.configured == 'true'
-        run: npm install -g @google/clasp@2.4.2
+        run: npm install -g @google/clasp@3.3.0
 
       - name: Restore clasp credentials
         # CLASPRC_JSON is the entire contents of ~/.clasprc.json from your
         # local machine after `clasp login`. See DEPLOY.md for how to set
-        # this secret.
+        # this secret. The OAuth client behind these credentials must be in
+        # "In production" publishing status (not "Testing") — otherwise the
+        # refresh token expires every 7 days and CI starts failing.
         if: steps.check.outputs.configured == 'true'
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
@@ -71,11 +120,31 @@ jobs:
         if: steps.check.outputs.configured == 'true'
         run: clasp push --force
 
-      - name: Deploy (update existing deployment so URL stays the same)
+      - name: Create a new versioned snapshot
+        # clasp version prints something like "Created version 12." We grep
+        # the trailing integer out and pass it to redeploy. Doing this
+        # explicitly (rather than letting redeploy auto-create) is what keeps
+        # the deployment ID stable.
+        id: version
+        if: steps.check.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          OUTPUT=$(clasp version "ci ${GITHUB_SHA::7}")
+          echo "$OUTPUT"
+          VERSION=$(echo "$OUTPUT" | grep -oE '[0-9]+' | tail -n 1)
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not parse version number from clasp output"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Created version $VERSION"
+
+      - name: Redeploy (update the existing deployment, keep the URL)
         if: steps.check.outputs.configured == 'true'
         env:
           DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          clasp deploy \
-            --deploymentId "$DEPLOYMENT_ID" \
-            --description "GHA $(date -u +%Y-%m-%dT%H:%MZ) ${GITHUB_SHA::7}"
+          clasp redeploy "$DEPLOYMENT_ID" \
+            -V "$VERSION" \
+            -d "ci $(date -u +%Y-%m-%dT%H:%MZ) ${GITHUB_SHA::7}"

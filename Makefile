@@ -5,7 +5,7 @@
 # But they're useful for fast iteration without going through git.
 #
 # One-time setup:
-#   npm install -g @google/clasp netlify-cli
+#   npm install -g @google/clasp@3.3.0 netlify-cli
 #   clasp login                     # OAuth dance, opens browser
 #   netlify login                   # OAuth dance, opens browser
 #   echo "<your-deployment-id>" > .clasp-deployment-id
@@ -19,7 +19,7 @@ help:
 	@echo "  validate              — run schema + cross-field validator on data/processed/"
 	@echo "  build-annotator-data  — copy data/processed/ JSONs into annotator/data/"
 	@echo "  deploy                — deploy both backend and frontend"
-	@echo "  deploy-backend        — clasp push + clasp deploy (Apps Script)"
+	@echo "  deploy-backend        — clasp push + clasp version + clasp redeploy (Apps Script)"
 	@echo "  deploy-frontend       — build-annotator-data + netlify deploy --prod"
 	@echo "  logs                  — tail Apps Script execution logs"
 	@echo "  status                — show clasp status (which files would be pushed)"
@@ -39,10 +39,18 @@ deploy-backend:
 		echo "  - make deploy-backend DEPLOYMENT_ID=AKfy..."; \
 		exit 1; \
 	fi
+	@# Manifest guard — fail fast if someone's edited webapp.access away from
+	@# ANYONE. Mirrors the same check the GitHub Actions workflow runs. See
+	@# DEPLOY.md → Troubleshooting for why.
+	@python3 -c 'import json,sys; m=json.load(open("annotator/appsscript.json")); w=m.get("webapp") or {}; sys.exit(0 if w.get("access")=="ANYONE" and w.get("executeAs")=="USER_DEPLOYING" else (print("ERROR: annotator/appsscript.json must declare webapp.access=ANYONE and webapp.executeAs=USER_DEPLOYING") or 1))'
 	clasp push --force
-	clasp deploy \
-		--deploymentId $(DEPLOYMENT_ID) \
-		--description "Local $(shell date -u +%Y-%m-%dT%H:%MZ)"
+	@# Pin the version explicitly. Letting clasp infer it on redeploy is the
+	@# root cause of clasp issue #63 (silent duplicate deployments).
+	$(eval VERSION := $(shell clasp version "Local $(shell date -u +%Y-%m-%dT%H:%MZ)" | grep -oE '[0-9]+' | tail -n 1))
+	@if [ -z "$(VERSION)" ]; then echo "ERROR: clasp version did not return a version number"; exit 1; fi
+	clasp redeploy $(DEPLOYMENT_ID) \
+		-V $(VERSION) \
+		-d "Local $(shell date -u +%Y-%m-%dT%H:%MZ)"
 
 deploy-frontend: build-annotator-data
 	netlify deploy --prod --dir=annotator

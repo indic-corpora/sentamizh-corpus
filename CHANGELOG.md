@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog v1.1.0](https://keepachangelog.com/en/1
 
 ## [Unreleased]
 
+### Changed (backend auto-deploy hardening)
+- `.github/workflows/deploy-backend.yml`, `Makefile`, `DEPLOY.md`: backend deploy upgraded from `@google/clasp@2.4.2` to `@google/clasp@3.3.0`, and the single `clasp deploy --deploymentId` step replaced with three explicit steps: `clasp push --force` → `clasp version` (creates a new versioned snapshot, captures the version number) → `clasp redeploy $DEPLOYMENT_ID -V $VERSION` (binds the deployment to that exact version).
+  - Why: the old single-step path is the root cause of [clasp issue #63](https://github.com/google/clasp/issues/63) — without an explicit `-V`, redeploys can silently shadow into a fresh deployment under certain Apps Script project states, which produces a new `/exec` URL and breaks any device with a bookmark to the annotator. We hit this twice on May 2 before tracking it down. Pinning the version eliminates the ambiguity.
+  - The CI workflow now also runs a manifest guard step that fails the build if `annotator/appsscript.json` is missing `"webapp": {"access": "ANYONE", "executeAs": "USER_DEPLOYING"}`. The web app's "Anyone" access setting persists across redeploys only because the manifest declares it; if the field is dropped, every redeploy from then on silently reverts the live deployment to "Only myself" and the annotator URL stops working on phones. The guard catches that before any deploy can happen.
+  - `Makefile` `deploy-backend` mirrors the same three-step pattern and the same manifest guard, so local `make deploy-backend` and CI behave identically.
+- `DEPLOY.md`: new conditional Step 6 documents the OAuth client publishing-status quirk. clasp's default OAuth client is already published by Google, so first-time setup needs no Cloud Console work. The step only applies when CI starts failing weekly with `invalid_grant` (indicates a custom OAuth client in Testing mode) or when the operator wants a project-owned client for rate-limit or REST-API reasons.
+- `DEPLOY.md`: troubleshooting section now documents the cleanup procedure for duplicate deployments (`clasp deployments` + `clasp undeploy`), the corrupted-deployment one-time UI fix to restore "Anyone" access after cleanup, and the recovery path when the manifest guard fails CI.
+
 ### Added
 - `scripts/build_annotator_data.py` — populates `annotator/data/` from the canonical `data/processed/` files at deploy time, so the ~19 MB corpus is not duplicated in the repo. Invoked by Netlify (via `netlify.toml`) and by the Makefile (`make deploy-frontend`).
 
