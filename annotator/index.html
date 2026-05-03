@@ -159,6 +159,57 @@
   .mic-status { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 16px; }
   .mic-status.error { color: var(--danger); }
 
+  /* "Suggest translation" button + AI-assisted draft state.
+     Visual goal: clearly signal "this is machine-suggested, not committed."
+     The textarea gets italic light-grey text; a small badge above the field
+     marks the draft. The badge clears the moment the annotator edits. */
+  .suggest-btn {
+    background: none;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    margin-top: 6px;
+    align-self: flex-start;
+  }
+  .suggest-btn:hover:not(:disabled) { background: var(--accent); color: white; }
+  .suggest-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ai-draft-badge {
+    display: inline-block;
+    font-size: 11px;
+    color: var(--accent);
+    background: rgba(160, 82, 45, 0.08);
+    border: 1px solid rgba(160, 82, 45, 0.2);
+    border-radius: 4px;
+    padding: 2px 8px;
+    margin-bottom: 6px;
+  }
+  textarea.ai-draft, input.ai-draft {
+    color: #888;
+    font-style: italic;
+    background: #fafafa;
+  }
+
+  /* Floating dictation preview — interim Soniox transcript renders here
+     instead of mutating the textarea on every token. Sidesteps cursor
+     fights when the annotator edits during dictation. */
+  .stt-preview {
+    position: absolute;
+    background: rgba(255, 250, 230, 0.97);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 14px;
+    color: var(--ink);
+    font-style: italic;
+    box-shadow: var(--shadow);
+    z-index: 1000;
+    max-width: 80vw;
+    pointer-events: none;
+  }
+
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip {
     padding: 10px 14px;
@@ -357,8 +408,14 @@ const state = {
   annotation: null,
   saveTimer: null,
   sonioxClient: null,           // Active SonioxClient instance, if recording
-  sonioxBoundField: null,       // {targetEl, statusEl, btnEl, baseText} during a recording
+  sonioxBoundField: null,       // {targetEl, statusEl, btnEl, baseText, selStart, selEnd, lang} during a recording
+  sttPreviewEl: null,           // Floating div showing interim transcript
   sessionId: 'sess-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now(),
+  // Wiktionary definitions for words in the currently-loaded verse, fetched
+  // in the background on verse load. Passed as context to /translate.
+  // {word: ['definition 1', 'definition 2', ...]}
+  verseWordDefs: {},
+  verseWordDefsForId: null,     // verse_id this cache belongs to
 };
 
 // ─── localStorage helpers ─────────────────────────────────────────────────
@@ -427,6 +484,114 @@ async function lookupWord(text) {
   return result;
 }
 
+// ─── Translation suggestion (NVIDIA NIM via /translate proxy, ADR 0007) ──
+
+/**
+ * Picks up to N candidate words from a verse to look up in Wiktionary as
+ * translation context. Cheap heuristic: split on whitespace + Tamil
+ * punctuation, dedupe, drop very short tokens (likely particles), keep the
+ * first N.
+ *
+ * Better-than-this would be morphological analysis to extract lemmas, but
+ * that's a Phase 2 problem. For now, raw words are good enough — Wiktionary
+ * either has the form or it doesn't, and missing entries are no worse than
+ * not asking.
+ */
+function extractCandidateWords(verseText, max = 10) {
+  if (!verseText) return [];
+  const tokens = String(verseText)
+    .split(/[\sீ-்ௗ।॥\.,;:!?'"`()\[\]\{\}\-—\d]+/u)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 3);
+  const seen = new Set();
+  const out = [];
+  for (const t of tokens) {
+    if (seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/**
+ * Pre-fetches Wiktionary definitions for words in the current verse. Runs
+ * in the background after verse load so the "Suggest translation" button
+ * doesn't block on cold lookups when the annotator clicks it.
+ *
+ * Populates state.verseWordDefs as a {word: [def1, def2, ...]} map. Empty
+ * results are skipped (no point passing "no definition" as context). Per-
+ * word caching is via the existing lookupCache.
+ */
+async function prefetchVerseWordDefs(verse) {
+  if (!verse || !verse.classical_tamil) return;
+  const verseId = verse.verse_id;
+  state.verseWordDefs = {};
+  state.verseWordDefsForId = verseId;
+
+  const words = extractCandidateWords(verse.classical_tamil, 10);
+  // Run in parallel; each lookupWord respects the cache.
+  await Promise.all(words.map(async (w) => {
+    try {
+      const r = await lookupWord(w);
+      // Re-check verse hasn't changed under us (annotator advanced quickly).
+      if (state.verseWordDefsForId !== verseId) return;
+      const entries = r.ok && r.data && Array.isArray(r.data.entries) ? r.data.entries : [];
+      const defs = [];
+      entries.slice(0, 1).forEach((e) => {
+        (e.definitions || []).slice(0, 2).forEach((d) => { if (d) defs.push(d); });
+      });
+      if (defs.length) state.verseWordDefs[w] = defs;
+    } catch {
+      // Best-effort — skip on individual failures.
+    }
+  }));
+}
+
+/**
+ * Calls /translate with the current verse + whatever context is available.
+ * The router prefers translating from the annotator's own paraphrase when
+ * she's already filled it (much easier task for the LLM than translating
+ * from raw classical Tamil). See ADR 0007 for the context-stacking design.
+ */
+async function requestTranslation(target) {
+  const verse = state.verses[state.index];
+  if (!verse) return { ok: false, reason: 'no_verse' };
+  return postAction({
+    action: 'translate',
+    target: target,
+    classical_tamil: verse.classical_tamil || '',
+    modern_tamil: state.annotation?.modern_tamil || null,
+    english: state.annotation?.english || null,
+    word_definitions: state.verseWordDefs || {},
+    verse_id: verse.verse_id || null,
+    source_text: verse.source_text || null,
+    session_id: state.sessionId,
+  });
+}
+
+/**
+ * Render an AI-suggested translation into a textarea as a draft state.
+ * The textarea gets the .ai-draft class (italic + grey + light bg). A
+ * badge appears above the field. The annotator's first edit (input event
+ * or first dictation token) clears the draft state and treats the text as
+ * her own. Saves are guarded — drafts in .ai-draft state are NOT written.
+ */
+function applyAiDraft(targetEl, badgeEl, draftText) {
+  targetEl.classList.add('ai-draft');
+  targetEl.value = draftText;
+  if (badgeEl) badgeEl.style.display = 'inline-block';
+  // Mark in dataset so save logic can check.
+  targetEl.dataset.aiDraft = '1';
+}
+
+function commitAiDraft(targetEl, badgeEl) {
+  if (!targetEl.classList.contains('ai-draft')) return;
+  targetEl.classList.remove('ai-draft');
+  delete targetEl.dataset.aiDraft;
+  if (badgeEl) badgeEl.style.display = 'none';
+}
+
 // Fire-and-forget telemetry. Never blocks the user.
 function logTelemetry(row) {
   if (!CONFIG.APPS_SCRIPT_URL) return;
@@ -444,7 +609,51 @@ function logTelemetry(row) {
 }
 
 // ─── Speech-to-text (Soniox web SDK) ──────────────────────────────────────
-async function startRecording(targetEl, statusEl, btnEl) {
+//
+// Design: dictation is selection-aware. On mic tap we capture the user's
+// current selection range in the textarea. As Soniox streams, the interim
+// transcript renders in a floating preview overlay near the textarea — the
+// textarea itself is NOT mutated during recording. On stop, the final
+// transcript is inserted at the captured selection range (replacing the
+// selection if any), via setRangeText. This sidesteps cursor fights with
+// the user editing during dictation, and matches the natural mental model
+// of "dictate to fill in the part I'm pointing at."
+
+function ensureSttPreview() {
+  if (state.sttPreviewEl) return state.sttPreviewEl;
+  const el = document.createElement('div');
+  el.className = 'stt-preview';
+  el.style.display = 'none';
+  document.body.appendChild(el);
+  state.sttPreviewEl = el;
+  return el;
+}
+
+function positionSttPreview(targetEl) {
+  const previewEl = ensureSttPreview();
+  const rect = targetEl.getBoundingClientRect();
+  // Place above the textarea if there's room; otherwise below.
+  const fitsAbove = rect.top > 60;
+  if (fitsAbove) {
+    previewEl.style.top = (rect.top + window.scrollY - 50) + 'px';
+  } else {
+    previewEl.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+  }
+  previewEl.style.left = (rect.left + window.scrollX) + 'px';
+}
+
+function showSttPreview(targetEl, text) {
+  const previewEl = ensureSttPreview();
+  previewEl.textContent = text || '…';
+  previewEl.style.display = 'block';
+  positionSttPreview(targetEl);
+}
+
+function hideSttPreview() {
+  if (state.sttPreviewEl) state.sttPreviewEl.style.display = 'none';
+}
+
+async function startRecording(targetEl, statusEl, btnEl, lang = 'ta') {
   // Stop any ongoing session first.
   if (state.sonioxClient) await stopRecording();
 
@@ -473,8 +682,21 @@ async function startRecording(targetEl, statusEl, btnEl) {
   }
   const tempKey = tokenRes.data.api_key;
 
-  const baseText = targetEl.value || '';
-  state.sonioxBoundField = { targetEl, statusEl, btnEl, baseText, recordStart: Date.now(), tempKey };
+  // Capture the selection range NOW. If the user later edits the textarea,
+  // these indices may no longer point where she intends — that's an
+  // acceptable trade-off for a single-pass, predictable dictation flow.
+  const selStart = (typeof targetEl.selectionStart === 'number')
+    ? targetEl.selectionStart : (targetEl.value || '').length;
+  const selEnd = (typeof targetEl.selectionEnd === 'number')
+    ? targetEl.selectionEnd : selStart;
+
+  state.sonioxBoundField = {
+    targetEl, statusEl, btnEl, lang,
+    selStart, selEnd,
+    recordStart: Date.now(),
+    tempKey,
+    finalSoFar: '',
+  };
 
   const client = new window.SonioxClient({
     apiKey: () => tempKey,
@@ -482,6 +704,7 @@ async function startRecording(targetEl, statusEl, btnEl) {
       btnEl.classList.add('recording');
       statusEl.textContent = 'கேட்கிறேன்... (நிறுத்த மீண்டும் தட்டுக)';
       statusEl.classList.remove('error');
+      showSttPreview(targetEl, '…');
     },
     onPartialResult: (result) => {
       const interim = (result.tokens || [])
@@ -490,11 +713,14 @@ async function startRecording(targetEl, statusEl, btnEl) {
       const final = (result.tokens || [])
         .filter((t) => t.is_final)
         .map((t) => t.text || '').join('');
+      if (state.sonioxBoundField) {
+        state.sonioxBoundField.finalSoFar += final;
+      }
+      // Show accumulated final + current interim in the floating preview.
+      // The textarea is left alone — the annotator can keep editing it
+      // without fighting the cursor.
       const seenFinal = state.sonioxBoundField?.finalSoFar || '';
-      const newFinal = seenFinal + final;
-      if (state.sonioxBoundField) state.sonioxBoundField.finalSoFar = newFinal;
-      const sep = baseText && !baseText.endsWith(' ') ? ' ' : '';
-      targetEl.value = (baseText + sep + newFinal + interim).trimStart();
+      showSttPreview(targetEl, (seenFinal + interim).trim() || '…');
     },
     onFinished: () => {
       finishRecording('ok');
@@ -508,7 +734,11 @@ async function startRecording(targetEl, statusEl, btnEl) {
   try {
     await client.start({
       model: CONFIG.STT_MODEL,
-      languageHints: ['ta'],
+      // Per-field language hint. Tamil for the verse paraphrase, free-text
+      // Tamil fields (karu, themes, imagery, etc.); English only for the
+      // English-translation field. Hardcoding 'ta' here used to force English
+      // dictation to be transliterated into Tamil characters.
+      languageHints: [lang || 'ta'],
     });
   } catch (err) {
     finishRecording('error', String(err));
@@ -524,9 +754,10 @@ function finishRecording(status, errMsg) {
   const bound = state.sonioxBoundField;
   state.sonioxBoundField = null;
   state.sonioxClient = null;
+  hideSttPreview();
 
   if (!bound) return;
-  const { targetEl, statusEl, btnEl, recordStart, finalSoFar } = bound;
+  const { targetEl, statusEl, btnEl, recordStart, finalSoFar, selStart, selEnd } = bound;
   btnEl.classList.remove('recording');
 
   if (status === 'error') {
@@ -537,11 +768,32 @@ function finishRecording(status, errMsg) {
     statusEl.classList.remove('error');
   }
 
-  // Trigger a save-on-input now that final transcript is in.
+  // Commit the final transcript at the captured selection (or replacing it).
+  // Use setRangeText to preserve undo history and to insert cleanly without
+  // resetting the textarea value wholesale. If the captured range is no
+  // longer valid (textarea was emptied or shrunk), fall back to appending.
+  const transcript = (finalSoFar || '').trim();
+  if (transcript && status === 'ok') {
+    const value = targetEl.value || '';
+    const safeStart = Math.min(selStart, value.length);
+    const safeEnd = Math.min(selEnd, value.length);
+    // Add a leading space if we're inserting after non-whitespace content.
+    const needsLeadingSpace = safeStart > 0 && !/\s$/.test(value.slice(0, safeStart));
+    const insert = (needsLeadingSpace ? ' ' : '') + transcript;
+    if (typeof targetEl.setRangeText === 'function') {
+      targetEl.setRangeText(insert, safeStart, safeEnd, 'end');
+    } else {
+      // Fallback for non-textarea elements (input[type=text] supports it
+      // in modern browsers, but some older paths may hit this).
+      targetEl.value = value.slice(0, safeStart) + insert + value.slice(safeEnd);
+    }
+  }
+
+  // Trigger save-on-input now that the final transcript is in. This also
+  // commits the AI draft (if any), since the input handler does that.
   targetEl.dispatchEvent(new Event('input'));
 
   const audioSec = Math.max(0, (Date.now() - recordStart) / 1000);
-  const transcript = finalSoFar || '';
   logTelemetry({
     endpoint: '/transcribe',
     provider: 'soniox',
@@ -571,7 +823,7 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
-function makeTextField({ key, label, labelEn, help, multiline = true, placeholder = '' }) {
+function makeTextField({ key, label, labelEn, help, multiline = true, placeholder = '', lang = 'ta', suggest = null }) {
   const wrap = el('div', { class: 'field' });
   wrap.appendChild(el('div', { class: 'field-label' },
     label,
@@ -579,12 +831,20 @@ function makeTextField({ key, label, labelEn, help, multiline = true, placeholde
   ));
   if (help) wrap.appendChild(el('div', { class: 'field-help' }, help));
 
+  // AI-draft badge — hidden by default, shown by applyAiDraft().
+  const badge = el('div', { class: 'ai-draft-badge' },
+    'AI-assisted draft — review before saving');
+  badge.style.display = 'none';
+  wrap.appendChild(badge);
+
   const row = el('div', { class: 'text-row' });
   const input = multiline
     ? el('textarea', { placeholder, rows: 3 })
     : el('input', { type: 'text', placeholder });
   input.value = state.annotation[key] ?? '';
   input.addEventListener('input', () => {
+    // First edit on an AI draft commits it as the user's text.
+    if (input.dataset.aiDraft) commitAiDraft(input, badge);
     state.annotation[key] = input.value || null;
     scheduleSave();
   });
@@ -593,16 +853,64 @@ function makeTextField({ key, label, labelEn, help, multiline = true, placeholde
   const mic = el('button', { class: 'mic-btn', type: 'button', 'aria-label': 'குரல் உள்ளீடு' }, '🎤');
   mic.addEventListener('click', (e) => {
     e.preventDefault();
+    // Tapping mic on an AI draft = "I want to dictate over this." Treat the
+    // draft as committed so the user's dictation builds on (or replaces) it
+    // as her own text, not a draft she might re-trigger.
+    if (input.dataset.aiDraft) commitAiDraft(input, badge);
     if (mic.classList.contains('recording')) {
       stopRecording();
     } else {
-      startRecording(input, status, mic);
+      startRecording(input, status, mic, lang);
     }
   });
   row.appendChild(input);
   row.appendChild(mic);
   wrap.appendChild(row);
   wrap.appendChild(status);
+
+  // Optional "Suggest translation" button. Only modern_tamil and english
+  // fields opt in (via suggest='modern_tamil' | 'english'). The button
+  // calls /translate with the verse + opposite-field context + Wiktionary
+  // definitions, then renders the response as an AI draft on this field.
+  if (suggest) {
+    const suggestBtn = el('button',
+      { class: 'suggest-btn', type: 'button' },
+      'மொழிபெயர்ப்பு பரிந்துரை / Suggest translation');
+    suggestBtn.addEventListener('click', async () => {
+      suggestBtn.disabled = true;
+      const original = suggestBtn.textContent;
+      suggestBtn.textContent = 'வரைவு உருவாக்குகிறது / Generating draft…';
+      try {
+        const result = await requestTranslation(suggest);
+        if (!result.ok) {
+          status.textContent = 'Suggestion failed: ' + (result.reason || 'unknown');
+          status.classList.add('error');
+          logTelemetry({ endpoint: '/translate:' + suggest, provider: 'nvidia-nim',
+            status: 'fetch_failed' });
+          return;
+        }
+        const data = result.data || {};
+        if (data.error) {
+          status.textContent = 'Suggestion failed: ' + data.error;
+          status.classList.add('error');
+          return;
+        }
+        if (!data.text) {
+          status.textContent = 'Suggestion returned empty text';
+          status.classList.add('error');
+          return;
+        }
+        applyAiDraft(input, badge, data.text);
+        status.textContent = '';
+        status.classList.remove('error');
+      } finally {
+        suggestBtn.disabled = false;
+        suggestBtn.textContent = original;
+      }
+    });
+    wrap.appendChild(suggestBtn);
+  }
+
   return wrap;
 }
 
@@ -657,7 +965,7 @@ function makeChipField({ key, label, labelEn, help, options, multi = false }) {
   return wrap;
 }
 
-function makeListField({ key, label, labelEn, help, placeholder }) {
+function makeListField({ key, label, labelEn, help, placeholder, lang = 'ta' }) {
   const wrap = el('div', { class: 'field' });
   wrap.appendChild(el('div', { class: 'field-label' },
     label,
@@ -678,7 +986,7 @@ function makeListField({ key, label, labelEn, help, placeholder }) {
   mic.addEventListener('click', (e) => {
     e.preventDefault();
     if (mic.classList.contains('recording')) stopRecording();
-    else startRecording(input, status, mic);
+    else startRecording(input, status, mic, lang);
   });
   row.appendChild(input);
   row.appendChild(mic);
@@ -825,11 +1133,19 @@ function showDictPopover(word, result, anchorRect) {
   } else {
     const entries = result.data.entries || [];
     if (!entries.length) {
+      // No entry — still link to Wiktionary so the annotator can check the
+      // article / suggest an edit there.
       box.appendChild(el('div', { class: 'dict-popover-empty' },
         'இந்த வார்த்தை அகராதியில் இல்லை. சிறிய பகுதியை தேர்வுசெய்து முயற்சிக்கவும்.'));
+      const wikLink = el('a', {
+        class: 'dict-popover-attrib',
+        href: 'https://ta.wiktionary.org/wiki/' + encodeURIComponent(word),
+        target: '_blank',
+        rel: 'noopener noreferrer',
+      }, 'View on Tamil Wiktionary →');
+      box.appendChild(wikLink);
     } else {
       entries.slice(0, 3).forEach((e) => {
-        if (e.source) box.appendChild(el('div', { class: 'dict-popover-source' }, e.source));
         const defs = (e.definitions || []).slice(0, 3);
         if (defs.length === 0) {
           box.appendChild(el('div', { class: 'dict-popover-def' }, '(அர்த்தம் கிடைக்கவில்லை)'));
@@ -837,9 +1153,22 @@ function showDictPopover(word, result, anchorRect) {
           defs.forEach((d) => box.appendChild(el('div', { class: 'dict-popover-def' }, d)));
         }
       });
+      // Wiktionary requires attribution under CC BY-SA. Link directly to the
+      // article so annotators can see the full entry, citations, and edit
+      // history. Tamil Wiktionary is the only backend for now; when UMTL is
+      // added in Phase 2 ([ADR 0006](docs/decisions/0006-tamil-wiktionary-for-dictionary-lookup.md)),
+      // each entry's e.source will pick the right attribution at render time.
+      const provider = result.data.provider || 'wiktionary';
+      const attribLink = el('a', {
+        class: 'dict-popover-attrib',
+        href: 'https://ta.wiktionary.org/wiki/' + encodeURIComponent(word),
+        target: '_blank',
+        rel: 'noopener noreferrer',
+      }, provider === 'wiktionary'
+        ? 'Source: Tamil Wiktionary (CC BY-SA)'
+        : 'Source: ' + provider);
+      box.appendChild(attribLink);
     }
-    box.appendChild(el('div', { class: 'dict-popover-attrib' },
-      'Source: University of Madras Tamil Lexicon · via Agarathi'));
   }
 
   document.body.appendChild(box);
@@ -1017,6 +1346,12 @@ function renderVerse() {
   attachSelectionLookup(verseTextEl);
   container.appendChild(verseTextEl);
 
+  // Pre-fetch Wiktionary definitions for words in this verse, in the
+  // background. Used as context by the "Suggest translation" feature
+  // (ADR 0007). Fire-and-forget; the button handles cold-cache gracefully
+  // by passing whatever's been collected when the click happens.
+  prefetchVerseWordDefs(verse).catch(() => { /* best-effort */ });
+
   // ─ Translation
   container.appendChild(el('div', { class: 'section-h' },
     el('span', { class: 'section-h-ta' }, 'மொழிபெயர்ப்பு'), ' — TRANSLATION'));
@@ -1025,12 +1360,15 @@ function renderVerse() {
     labelEn: 'modern Tamil paraphrase',
     help: 'நீ இந்தப் பாடலை இக்கால தமிழில் எப்படி சொல்வாய்?',
     placeholder: 'மைக் பொத்தானை அழுத்தி பேசுங்கள்...',
+    suggest: 'modern_tamil',
   }));
   container.appendChild(makeTextField({
     key: 'english', label: 'English',
     labelEn: 'english translation',
     help: 'Optional. A free English rendering.',
     placeholder: 'Tap mic and dictate, or skip...',
+    lang: 'en',
+    suggest: 'english',
   }));
 
   // ─ Tamil poetics

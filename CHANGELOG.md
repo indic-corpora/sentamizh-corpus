@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog v1.1.0](https://keepachangelog.com/en/1
 
 ## [Unreleased]
 
+### Added (AI translation suggestions)
+- `annotator/google_apps_script.gs`: new `handleTranslate(body)` function and `POST /exec action=translate` endpoint. Calls NVIDIA NIM (`integrate.api.nvidia.com`) with `nvidia/nemotron-3-nano-omni` by default, swappable via `TRANSLATION_MODEL` Script Property. Stacks context aggressively: the verse's classical Tamil + the annotator's modern Tamil paraphrase (when generating English) or English (when generating modern Tamil) + Wiktionary definitions for words in the verse. Routes the LLM through the easiest available representation rather than translating from raw classical Tamil where every model performs poorly.
+- `annotator/index.html`: new "Suggest translation" button on the modern Tamil and English fields. Renders the LLM response as an italic light-grey draft in the textarea with an "AI-assisted draft — review before saving" badge. The draft is **not** committed to the corpus until the annotator edits it (any keystroke or dictation), at which point the badge clears and the draft becomes her text. Wiktionary definitions for words in the verse are pre-fetched in the background on verse load so the button click doesn't block on cold lookups.
+- `docs/decisions/0007-translation-backend.md`: ADR for the choice (NVIDIA NIM + Nemotron, proxy contract per ADR 0004, context-stacking architecture).
+- `docs/decisions/0008-open-model-eval-classical-tamil.md`: ADR for the eval methodology to compare 5 candidate models (Nemotron, DeepSeek, Llama 3.3, Sarvam, IndicTrans2) on a fixed 10-verse test set across 3 metrics (lexical anchoring, faithfulness, fluency). The eval is concurrent with Phase 1, not blocking.
+- `annotator/google_apps_script.gs`: `authorize()` helper now also touches NVIDIA NIM so a single editor-driven consent flow grants the `script.external_request` scope for all three outbound hosts (Wiktionary, Soniox, NIM).
+- `annotator/SETUP.md`: Step 5 expanded with `NVIDIA_API_KEY` and `TRANSLATION_MODEL` Script Properties (both optional — the AI suggestion feature is opt-in).
+- `DEPLOY.md`: troubleshooting entry for "NVIDIA_API_KEY not configured." API keys section updated.
+
+### Changed (selection-aware mic dictation)
+- `annotator/index.html`: replaced the previous "append to end" Soniox dictation with **selection-aware insertion**. On mic tap, the textarea's `selectionStart`/`selectionEnd` is captured. Interim transcripts render in a floating preview overlay near the textarea instead of mutating the textarea on every token (sidesteps cursor fights with the annotator editing during dictation). On stop, the final transcript is committed via `setRangeText` at the captured selection — replacing the selection if any, inserting at cursor otherwise, with a leading space when needed. Lets the annotator point at a specific word to replace, dictate, and have the new text land where she pointed.
+
+### Fixed (per-field STT language hint)
+- `annotator/index.html`: Soniox `languageHints` was hardcoded to `['ta']` for every mic, so the English field's mic transcribed English speech into Tamil characters. `makeTextField` and `makeListField` now accept a `lang` parameter (defaults to `'ta'`); the English-translation field passes `lang: 'en'`. All other free-text fields stay on Tamil.
+
+### Fixed (Wiktionary attribution in popover)
+- `annotator/index.html`: dictionary popover attribution updated from a hardcoded "University of Madras Tamil Lexicon · via Agarathi" string to the correct "Source: Tamil Wiktionary (CC BY-SA)" linking to the actual article on `ta.wiktionary.org`. Empty-result popovers also now link to Wiktionary so the annotator can check the article directly or contribute the missing word upstream. The hardcoded UMTL/Agarathi string was a leftover from before the Wiktionary migration in [ADR 0006](docs/decisions/0006-tamil-wiktionary-for-dictionary-lookup.md) and was mis-crediting Wiktionary content as UMTL — caught after the May 2 deploy.
+
 ### Fixed (frontend build)
 - `netlify.toml`: pinned `PYTHON_VERSION = "3.11"` in `[build.environment]`. Without this, recent Netlify build images don't have `python3` on PATH, so `python3 scripts/build_annotator_data.py` fails before producing any log output (we saw a "Loading" log with no content on May 2). The script only uses stdlib so any 3.8+ would work; 3.11 is the safe default.
 
@@ -26,6 +44,7 @@ The format is based on [Keep a Changelog v1.1.0](https://keepachangelog.com/en/1
 
 ### Changed (dictionary backend)
 - `annotator/google_apps_script.gs`: dictionary lookup now queries Tamil Wiktionary (`ta.wiktionary.org`) at runtime instead of Agarathi. No API key required. Same `/lookup` response shape as before, so the frontend popup is unchanged. Reasoning and Phase 2 plan to add a self-hosted UMTL backend recorded in [ADR 0006](docs/decisions/0006-tamil-wiktionary-for-dictionary-lookup.md).
+- `annotator/index.html`: dictionary popover attribution updated to "Source: Tamil Wiktionary (CC BY-SA)" with a clickable link to the article on `ta.wiktionary.org`. Previously a hardcoded "University of Madras Tamil Lexicon · via Agarathi" string was rendered for every result, which mis-attributed Wiktionary content to UMTL — caught after the May 2 deploy when the popover started showing the wrong source. Empty-result popovers also now link to Wiktionary so annotators can check the article directly or contribute the missing word upstream.
 - `annotator/SETUP.md`: removed the Agarathi subscription step (Step 3); only `SONIOX_API_KEY` is required in Script Properties now.
 - `ROADMAP.md` Phase 2: added a self-hosted UMTL dictionary backend item — OCR the public-domain Internet Archive scans, publish under `indic-corpora`, add as a second backend behind the same `/lookup` proxy. Phase 1 uses Wiktionary; Phase 2 will benchmark UMTL vs Wiktionary as a project publication.
 

@@ -245,8 +245,11 @@ Someone edited `annotator/appsscript.json` and dropped or changed the `webapp.ac
 
 Commit and push. The guard passes and the deploy proceeds.
 
-**Soniox or Agarathi key seems to have disappeared after `clasp push`.**
-Don't worry — Script Properties live server-side and aren't part of the source code clasp manages. They survive every push and deploy. If they really did get cleared, re-add them at Apps Script editor → ⚙️ → Script Properties.
+**Soniox or NVIDIA API key seems to have disappeared after `clasp push`.**
+Don't worry — Script Properties live server-side and aren't part of the source code clasp manages. They survive every push and deploy. If they really did get cleared, re-add them at Apps Script editor → ⚙️ → Script Properties (`SONIOX_API_KEY`, `NVIDIA_API_KEY`).
+
+**"Suggest translation" returns "NVIDIA_API_KEY not configured."**
+The NIM key isn't set in Script Properties. Get one free at <https://build.nvidia.com> (sign in → pick a model → **Get API key** → copy `nvapi-…`). Apps Script editor → ⚙️ → Script Properties → add `NVIDIA_API_KEY` with that value. After saving, run `authorize()` once from the editor's function dropdown so the deploying user grants OAuth consent for the new outbound host (`integrate.api.nvidia.com`). Reasoning for using NIM is in [ADR 0007](docs/decisions/0007-translation-backend.md).
 
 ---
 
@@ -278,6 +281,6 @@ For an instant rollback without git, in the Apps Script editor: **Deploy → Man
 
 ## What's still manual (and should stay that way)
 
-- **Adding API keys.** `SONIOX_API_KEY` and `AGARATHI_API_KEY` live in Apps Script Script Properties, not in code. Set them once in Apps Script editor → ⚙️ → Script Properties; clasp doesn't touch them.
+- **Adding API keys.** `SONIOX_API_KEY` (required) and `NVIDIA_API_KEY` (optional, for AI translation suggestions) live in Apps Script Script Properties, not in code. Set them once in Apps Script editor → ⚙️ → Script Properties; clasp doesn't touch them. After adding a new key, run `authorize()` from the editor's function dropdown so OAuth consent is granted for any new outbound hosts.
 - **Connecting GitHub to Netlify.** One-time UI step. Once done, every push triggers a deploy.
 - **Telling Vijayalakshmi about a new feature.** No automation can replace "hey, try the new save toast."

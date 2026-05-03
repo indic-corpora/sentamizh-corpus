@@ -1,6 +1,6 @@
 # Sentamizh Annotator — Phase 1 Setup
 
-This is a one-time setup. After it's done, Vijayalakshmi Prasad — the project's classical-Tamil expert annotator — opens a link on her phone and starts annotating. Her work flows into a Google Sheet you control. Audio dictation goes through Soniox (a speech-to-text service). Per-word dictionary lookups go through Agarathi (Tamil dictionary API serving the University of Madras Tamil Lexicon).
+This is a one-time setup. After it's done, Vijayalakshmi Prasad — the project's classical-Tamil expert annotator — opens a link on her phone and starts annotating. Her work flows into a Google Sheet you control. Audio dictation goes through Soniox (a speech-to-text service). Per-word dictionary lookups go through Tamil Wiktionary (no signup, free). The optional "Suggest translation" button calls NVIDIA NIM (Nemotron 3 Nano Omni) for an AI-assisted draft the annotator can edit before saving.
 
 **Total time: about 25 minutes.**
 
@@ -46,17 +46,19 @@ The choice and the Phase 2 plan to add a self-hosted UMTL backend are documented
 
 ---
 
-## Step 5 — Store the Soniox API key in Script Properties
+## Step 5 — Store API keys in Script Properties
 
 In the Apps Script editor:
 
 1. Click the gear icon (⚙️) on the left rail → **Project Settings**.
 2. Scroll to **Script Properties** → click **Add script property**.
-3. Add this property:
-   - Property: `SONIOX_API_KEY`, value: your Soniox `sk_…` key
+3. Add these properties:
+   - **`SONIOX_API_KEY`**: your Soniox `sk_…` key.
+   - **`NVIDIA_API_KEY`** *(optional, only needed if you want the "Suggest translation" feature)*: your NVIDIA NIM API key. Get one free at <https://build.nvidia.com> — sign in, click any model card (e.g. Nemotron), click **Get API key**, copy the `nvapi-…` value.
+   - **`TRANSLATION_MODEL`** *(optional, defaults to `nvidia/nemotron-3-nano-omni`)*: any model identifier supported by NVIDIA NIM. Useful if you want to swap models without redeploying. The reasoning for the default and the eval methodology for picking a different one are recorded in [`docs/decisions/0007-translation-backend.md`](../docs/decisions/0007-translation-backend.md) and [`0008-open-model-eval-classical-tamil.md`](../docs/decisions/0008-open-model-eval-classical-tamil.md).
 4. Click **Save script properties**.
 
-The Soniox key lives server-side. Vijayalakshmi's phone never sees it — the script mints short-lived (10-minute) Soniox tokens on demand. Dictionary lookups go to Tamil Wiktionary's public API and don't require any key.
+API keys live server-side. Vijayalakshmi's phone never sees them — the script mints short-lived (10-minute) Soniox tokens on demand, calls NIM with the key in the `Authorization` header, and forwards Wiktionary requests through its own anonymous client. Dictionary lookups don't require any key.
 
 ---
 

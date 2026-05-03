@@ -10,6 +10,8 @@
  *   POST  body:{action:"transcribe-token"}      → mint a Soniox temp API key
  *   POST  body:{action:"lookup", text:string}    → Tamil dictionary lookup
  *                                                  (Tamil Wiktionary, see ADR 0006)
+ *   POST  body:{action:"translate", ...}         → AI translation suggestion
+ *                                                  (NVIDIA NIM, see ADR 0007)
  *   POST  body:{action:"log", ...telemetry}      → append a telemetry row
  *   POST  body:{verse_id, source_text, ...}      → upsert a verse annotation
  *   GET   ?text=<corpus_id>                      → list saved annotations for a corpus
@@ -21,14 +23,20 @@
  *   - Dictionary lookup proxies the Tamil Wiktionary `extracts` API;
  *     no API key required. Phase 2 plan: add a self-hosted UMTL backend
  *     behind the same /lookup endpoint (ADR 0006).
+ *   - Translation calls NVIDIA NIM with Nemotron 3 Nano Omni by default,
+ *     stacking the annotator's modern Tamil paraphrase + Wiktionary
+ *     definitions as additional context to materially improve quality on
+ *     classical Tamil (ADR 0007). Model is swappable via Script Property.
  *   - Telemetry rows go to a dedicated `_telemetry` tab, async-safe.
  *
  * Setup:
  *   In Project Settings → Script Properties, set:
- *     SONIOX_API_KEY    = sk_live_xxxx (from soniox.com dashboard)
+ *     SONIOX_API_KEY      = sk_live_xxxx (from soniox.com dashboard)
+ *     NVIDIA_API_KEY      = nvapi-xxxx (from build.nvidia.com)
+ *     TRANSLATION_MODEL   = (optional) defaults to "nvidia/nemotron-3-nano-omni"
  *
  *   No dictionary key is required — Tamil Wiktionary is queried without
- *   authentication. The Soniox key never reaches the browser.
+ *   authentication. API keys never reach the browser.
  */
 
 const ANNOTATION_COLUMNS = [
@@ -77,6 +85,9 @@ function doPost(e) {
     }
     if (action === 'lookup') {
       return jsonResponse(handleLookup(body));
+    }
+    if (action === 'translate') {
+      return jsonResponse(handleTranslate(body));
     }
     if (action === 'log') {
       return jsonResponse(handleLog(body));
@@ -264,6 +275,230 @@ function parseWiktionaryExtract(extract) {
 }
 
 
+// ─── AI translation suggestion (NVIDIA NIM) ───────────────────────────────
+
+/**
+ * Suggests a translation for the Sentamizh annotator. Calls NVIDIA NIM with
+ * an OpenAI-compatible chat completion. Stacks context aggressively:
+ *
+ *   - The verse's classical Tamil text (always).
+ *   - The annotator's modern Tamil paraphrase, if she's already filled it,
+ *     when generating English. Routes the LLM through the easier task of
+ *     "translate modern Tamil to English" instead of "translate classical
+ *     Tamil to English."
+ *   - The annotator's English rendering, if she's already filled it, when
+ *     generating modern Tamil.
+ *   - Tamil Wiktionary definitions for words in the verse, pre-fetched by
+ *     the frontend. Anchors interpretation in real definitions, sharply
+ *     reducing hallucination on rare classical words.
+ *
+ * Body shape:
+ *   {
+ *     action: 'translate',
+ *     target: 'modern_tamil' | 'english',
+ *     classical_tamil: string,           // required
+ *     modern_tamil:    string | null,    // optional context
+ *     english:         string | null,    // optional context
+ *     word_definitions: { [word]: string[] }, // optional, max ~10 entries
+ *     verse_id:        string | null,    // for telemetry
+ *     source_text:     string | null,    // for telemetry
+ *   }
+ *
+ * Reads from Script Properties:
+ *   NVIDIA_API_KEY      = nvapi-xxxx (required)
+ *   TRANSLATION_MODEL   = optional, defaults to "nvidia/nemotron-3-nano-omni"
+ *
+ * Reasoning recorded in ADR 0007. Empirical model comparison in ADR 0008.
+ */
+function handleTranslate(body) {
+  const target = String(body.target || '');
+  if (target !== 'modern_tamil' && target !== 'english') {
+    return { error: 'target must be "modern_tamil" or "english"', provider: 'nvidia-nim' };
+  }
+  const classical = String(body.classical_tamil || '').trim();
+  if (!classical) {
+    return { error: 'classical_tamil is required', provider: 'nvidia-nim' };
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = props.getProperty('NVIDIA_API_KEY');
+  if (!apiKey) {
+    return { error: 'NVIDIA_API_KEY not configured in Script Properties', provider: 'nvidia-nim' };
+  }
+  const model = props.getProperty('TRANSLATION_MODEL') || 'nvidia/nemotron-3-nano-omni';
+
+  const modernTamil = body.modern_tamil ? String(body.modern_tamil).trim() : '';
+  const english = body.english ? String(body.english).trim() : '';
+  const wordDefs = (body.word_definitions && typeof body.word_definitions === 'object')
+    ? body.word_definitions : {};
+
+  const messages = buildTranslatePrompt({
+    target: target,
+    classical: classical,
+    modernTamil: modernTamil,
+    english: english,
+    wordDefs: wordDefs,
+  });
+
+  const start = Date.now();
+  const res = UrlFetchApp.fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: 'Bearer ' + apiKey,
+      Accept: 'application/json',
+    },
+    payload: JSON.stringify({
+      model: model,
+      messages: messages,
+      temperature: 0.2,
+      max_tokens: 600,
+      // The annotator wants a clean translation, not chain-of-thought reasoning.
+      // Some Nemotron models support a "detailed_thinking" toggle; we explicitly
+      // turn it off for production translation calls.
+      detailed_thinking: false,
+    }),
+    muteHttpExceptions: true,
+  });
+  const latency = Date.now() - start;
+
+  if (res.getResponseCode() >= 300) {
+    return {
+      error: 'NIM error ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300),
+      provider: 'nvidia-nim',
+      model: model,
+      latency_ms: latency,
+    };
+  }
+
+  let data;
+  try { data = JSON.parse(res.getContentText()); }
+  catch (err) {
+    return { error: 'NIM returned non-JSON', provider: 'nvidia-nim', model: model, latency_ms: latency };
+  }
+
+  const choice = (data.choices && data.choices[0]) || {};
+  const text = (choice.message && choice.message.content) ? String(choice.message.content).trim() : '';
+  if (!text) {
+    return {
+      error: 'NIM returned empty completion',
+      provider: 'nvidia-nim',
+      model: model,
+      latency_ms: latency,
+    };
+  }
+
+  // Best-effort cost estimate. NIM bills per million tokens; rates vary by
+  // model. Numbers below are 2026-Q2 published Nemotron rates and are used
+  // for telemetry only — not enforcement. Update if rates change materially.
+  const usage = data.usage || {};
+  const promptTokens = usage.prompt_tokens || 0;
+  const completionTokens = usage.completion_tokens || 0;
+  const costEstimate = (promptTokens * 0.2 / 1e6) + (completionTokens * 0.8 / 1e6);
+
+  // Async telemetry — never block the response on logging.
+  try {
+    const sheet = ensureTelemetrySheet();
+    sheet.appendRow(TELEMETRY_COLUMNS.map((col) => {
+      if (col === 'timestamp') return new Date().toISOString();
+      if (col === 'session_id') return body.session_id || '';
+      if (col === 'endpoint') return '/translate:' + target;
+      if (col === 'provider') return 'nvidia-nim';
+      if (col === 'status') return 'ok';
+      if (col === 'latency_ms') return latency;
+      if (col === 'input_chars') return classical.length + modernTamil.length + english.length;
+      if (col === 'output_chars') return text.length;
+      if (col === 'cost_estimate_usd') return costEstimate;
+      if (col === 'verse_id') return body.verse_id || '';
+      if (col === 'extra_json') return JSON.stringify({
+        model: model,
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        word_defs_count: Object.keys(wordDefs).length,
+        had_modern_tamil_context: !!modernTamil,
+        had_english_context: !!english,
+      });
+      return '';
+    }));
+  } catch (err) {
+    // Telemetry must never break the user-facing response.
+  }
+
+  return {
+    text: text,
+    target: target,
+    model: model,
+    provider: 'nvidia-nim',
+    latency_ms: latency,
+    cost_estimate_usd: costEstimate,
+  };
+}
+
+/**
+ * Builds the chat-completion messages for /translate. Kept as a separate
+ * function so it can be reviewed independently and (eventually) re-used by
+ * the eval harness in ADR 0008.
+ */
+function buildTranslatePrompt(opts) {
+  const target = opts.target;
+  const targetLabel = target === 'modern_tamil' ? 'Modern Tamil paraphrase' : 'English translation';
+
+  const systemLines = [
+    'You are translating verses from a corpus of Classical Tamil literature for a working annotator.',
+    '',
+    'Your output is a draft. The annotator is fluent in Classical Tamil and will edit your output before saving it.',
+    'Be faithful to the literal meaning of the verse. Where the verse uses idiomatic, theological, or genre-specific language, prefer a literal rendering that the annotator can refine over a free interpretation.',
+    'Do not invent referents that are not in the verse or the supplied dictionary entries.',
+    'When you are unsure of a word, prefer the meaning given in the supplied dictionary entries over your own guess.',
+    '',
+  ];
+
+  if (target === 'modern_tamil') {
+    systemLines.push('Output a single paragraph of grammatical, contemporary written Tamil.');
+    systemLines.push('Do not include the verse, the prompt, headings, or any explanation. Just the paraphrase.');
+  } else {
+    systemLines.push('Output a single paragraph of clear, grammatical English.');
+    systemLines.push('Do not include the verse, the prompt, headings, or any explanation. Just the translation.');
+  }
+
+  const userLines = [];
+  userLines.push('CLASSICAL TAMIL VERSE:');
+  userLines.push(opts.classical);
+  userLines.push('');
+
+  // Wiktionary definitions — anchor to authoritative dictionary content.
+  if (opts.wordDefs && Object.keys(opts.wordDefs).length) {
+    userLines.push('TAMIL WIKTIONARY DEFINITIONS for words in the verse (use these as authoritative):');
+    Object.keys(opts.wordDefs).forEach(function (word) {
+      const defs = opts.wordDefs[word];
+      const text = Array.isArray(defs) ? defs.slice(0, 3).join(' / ') : String(defs);
+      userLines.push('- ' + word + ': ' + text);
+    });
+    userLines.push('');
+  }
+
+  // Annotator's own paraphrase as the strongest signal — translate from this
+  // when present, falling back to the classical text otherwise.
+  if (target === 'english' && opts.modernTamil) {
+    userLines.push('ANNOTATOR\'S MODERN TAMIL PARAPHRASE (use this as the primary basis for the English translation; the classical verse and dictionary entries above are for reference):');
+    userLines.push(opts.modernTamil);
+    userLines.push('');
+  }
+  if (target === 'modern_tamil' && opts.english) {
+    userLines.push('ANNOTATOR\'S ENGLISH RENDERING (use this as a strong hint for the modern Tamil paraphrase, alongside the classical verse and dictionary entries above):');
+    userLines.push(opts.english);
+    userLines.push('');
+  }
+
+  userLines.push('TASK: Produce the ' + targetLabel + ' now.');
+
+  return [
+    { role: 'system', content: systemLines.join('\n') },
+    { role: 'user', content: userLines.join('\n') },
+  ];
+}
+
+
 // ─── Telemetry log (best-effort, fire-and-forget) ─────────────────────────
 
 function handleLog(body) {
@@ -417,9 +652,17 @@ function jsonResponse(obj) {
  * Add a touch for any new scope here when the manifest grows.
  */
 function authorize() {
-  // script.external_request — needed by handleLookup (Wiktionary) and
-  // handleTranscribeToken (Soniox).
+  // script.external_request — needed by handleLookup (Wiktionary),
+  // handleTranscribeToken (Soniox), and handleTranslate (NVIDIA NIM).
+  // We touch each distinct host so the consent screen lists them and the
+  // deploying user is fully aware of the outbound endpoints.
   UrlFetchApp.fetch('https://ta.wiktionary.org/w/api.php?action=query&format=json&meta=siteinfo', {
+    muteHttpExceptions: true,
+  });
+  // NVIDIA NIM endpoint touch. We only HEAD the host, since a real /v1/chat
+  // call requires the API key. The 401 we get back from an unauthorized
+  // request is fine — the goal is consent for the host, not a real call.
+  UrlFetchApp.fetch('https://integrate.api.nvidia.com/v1/models', {
     muteHttpExceptions: true,
   });
 
@@ -430,5 +673,5 @@ function authorize() {
   // similar. Currently unused, but the manifest declares it.
   ScriptApp.getScriptId();
 
-  Logger.log('authorize(): all manifest scopes consented. Live deploys can now call UrlFetchApp + SpreadsheetApp.');
+  Logger.log('authorize(): all manifest scopes consented. Live deploys can now call UrlFetchApp (Wiktionary, Soniox, NVIDIA NIM) + SpreadsheetApp.');
 }
