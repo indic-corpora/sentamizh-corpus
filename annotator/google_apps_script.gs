@@ -356,11 +356,17 @@ function handleTranslate(body) {
       model: model,
       messages: messages,
       temperature: 0.2,
-      max_tokens: 600,
-      // The annotator wants a clean translation, not chain-of-thought reasoning.
-      // Some Nemotron models support a "detailed_thinking" toggle; we explicitly
-      // turn it off for production translation calls.
-      detailed_thinking: false,
+      max_tokens: 1200,
+      // Nemotron 3 Nano is a reasoning model. The annotator wants a clean
+      // translation, not chain-of-thought tokens. The correct way to disable
+      // reasoning on Nemotron is via chat_template_kwargs.enable_thinking,
+      // passed through extra_body. Without this, the model wastes tokens on
+      // <think>...</think> blocks before producing the actual answer (or
+      // produces ONLY thinking and an empty content field, depending on
+      // backend version).
+      extra_body: {
+        chat_template_kwargs: { enable_thinking: false },
+      },
     }),
     muteHttpExceptions: true,
   });
@@ -381,11 +387,31 @@ function handleTranslate(body) {
     return { error: 'NIM returned non-JSON', provider: 'nvidia-nim', model: model, latency_ms: latency };
   }
 
+  // Nemotron 3 Nano response shapes seen in the wild:
+  //   1. message.content = "actual answer" (when enable_thinking=false works)
+  //   2. message.content = "<think>reasoning</think>actual answer" (template
+  //      added thinking block even with enable_thinking=false)
+  //   3. message.content = "" + message.reasoning_content = "answer" (some
+  //      NIM backends route the entire output to reasoning_content)
+  // We try all three.
   const choice = (data.choices && data.choices[0]) || {};
-  const text = (choice.message && choice.message.content) ? String(choice.message.content).trim() : '';
+  const msg = choice.message || {};
+  let text = String(msg.content || '').trim();
+  // Strip <think>...</think> blocks if present.
+  if (text) {
+    text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  }
+  // Fall back to reasoning_content if content is empty after stripping.
+  if (!text && msg.reasoning_content) {
+    text = String(msg.reasoning_content).trim();
+    text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  }
   if (!text) {
+    // Capture the response shape so we can debug. Truncate to 500 chars to
+    // avoid blowing up the JSON response or the telemetry row.
+    const snippet = JSON.stringify(data).slice(0, 500);
     return {
-      error: 'NIM returned empty completion',
+      error: 'NIM returned empty completion. First 500 chars of response: ' + snippet,
       provider: 'nvidia-nim',
       model: model,
       latency_ms: latency,
