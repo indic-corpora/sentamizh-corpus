@@ -15,7 +15,13 @@ A "suggest translation" feature that drafts a starting paraphrase the annotator 
 
 ## Decision
 
-Phase 1 ships a **`/translate`** proxy endpoint on Apps Script that calls **NVIDIA NIM** (`integrate.api.nvidia.com`) with **Nemotron 3 Nano 30B-A3B** (`nvidia/nemotron-3-nano-30b-a3b`) as the default model — the text-only variant of the Nemotron 3 Nano family. The Omni multimodal variant (`nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`) is overkill for text translation; we reserve it for the Phase 5 voice/register fine-tune ([ADR 0005](0005-nemotron-3-nano-omni-as-phase-5-target.md)). The model identifier is read from a Script Property (`TRANSLATION_MODEL`) so swapping to a different model is a property change, not a code change.
+Phase 1 ships a **`/translate`** proxy endpoint on Apps Script that calls **NVIDIA NIM** (`integrate.api.nvidia.com`). The architectural choice is NIM (Phase 5 alignment, open-weight, swappable). The default model went through three iterations during the Phase 1 launch:
+
+1. We initially defaulted to the Phase 5 target (`nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`). The Omni variant is multimodal and overkill for text translation — and on NIM it ignores `enable_thinking=false` in some configurations, leaking raw chain-of-thought into the response.
+2. We then tried the text-only variant (`nvidia/nemotron-3-nano-30b-a3b`). Same reasoning-leakage failure mode — the model is a reasoning model regardless of variant, and NIM's behavior with the disable-thinking parameter is inconsistent across model versions.
+3. **Current default: `meta/llama-3.3-70b-instruct`** — a non-reasoning model with broad multilingual coverage, available on NIM under the same OpenAI-compatible API. Produces clean direct answers without the chain-of-thought leakage. Phase 5 alignment with Nemotron is preserved at the architectural level (still NIM, still the same `/translate` proxy contract), with model choice deferred to the empirical eval in [ADR 0008](0008-open-model-eval-classical-tamil.md).
+
+The model identifier is read from a Script Property (`TRANSLATION_MODEL`) so swapping to a different model is a property change, not a code change.
 
 The frontend renders a "Suggest translation" button on the `modern_tamil` and `english` fields. Tapping it POSTs to `/translate` with a payload that includes:
 

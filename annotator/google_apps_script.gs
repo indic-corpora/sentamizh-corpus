@@ -33,7 +33,7 @@
  *   In Project Settings → Script Properties, set:
  *     SONIOX_API_KEY      = sk_live_xxxx (from soniox.com dashboard)
  *     NVIDIA_API_KEY      = nvapi-xxxx (from build.nvidia.com)
- *     TRANSLATION_MODEL   = (optional) defaults to "nvidia/nemotron-3-nano-30b-a3b"
+ *     TRANSLATION_MODEL   = (optional) defaults to "meta/llama-3.3-70b-instruct"
  *
  *   No dictionary key is required — Tamil Wiktionary is queried without
  *   authentication. API keys never reach the browser.
@@ -325,11 +325,15 @@ function handleTranslate(body) {
   if (!apiKey) {
     return { error: 'NVIDIA_API_KEY not configured in Script Properties', provider: 'nvidia-nim' };
   }
-  // Default to the text-only Nano variant for Phase 1 translation. Omni
-  // (nvidia/nemotron-3-nano-omni-30b-a3b-reasoning) is the multimodal
-  // version — overkill for text translation, slower, more expensive. We
-  // reserve it for the Phase 5 voice/register fine-tune (ADR 0005).
-  const model = props.getProperty('TRANSLATION_MODEL') || 'nvidia/nemotron-3-nano-30b-a3b';
+  // Default to Llama 3.3 70B Instruct — a non-reasoning model with broad
+  // multilingual coverage. Nemotron 3 Nano is a reasoning model and on NIM
+  // it ignores enable_thinking=false in some configurations, leaking its
+  // raw chain-of-thought into message.content (we hit this on May 3).
+  // Llama 3.3 produces clean direct answers without that failure mode.
+  // Phase 5's Nemotron Omni fine-tune is still the strategic target
+  // (ADR 0005, ADR 0007); the eval in ADR 0008 will compare candidates
+  // empirically and update this default to the winner.
+  const model = props.getProperty('TRANSLATION_MODEL') || 'meta/llama-3.3-70b-instruct';
 
   const modernTamil = body.modern_tamil ? String(body.modern_tamil).trim() : '';
   const english = body.english ? String(body.english).trim() : '';
@@ -461,6 +465,17 @@ function handleTranslate(body) {
     provider: 'nvidia-nim',
     latency_ms: latency,
     cost_estimate_usd: costEstimate,
+    // Echo back what context was actually used. Lets the frontend verify
+    // (and log to the browser console) that the Wiktionary prefetch
+    // populated the dictionary section, that the annotator's modern Tamil
+    // paraphrase was passed when generating English, etc. — without
+    // having to dig into the Sheet's _telemetry tab.
+    context_used: {
+      word_defs_count: Object.keys(wordDefs).length,
+      had_modern_tamil_context: !!modernTamil,
+      had_english_context: !!english,
+      classical_tamil_chars: classical.length,
+    },
   };
 }
 
@@ -480,15 +495,22 @@ function buildTranslatePrompt(opts) {
     'Be faithful to the literal meaning of the verse. Where the verse uses idiomatic, theological, or genre-specific language, prefer a literal rendering that the annotator can refine over a free interpretation.',
     'Do not invent referents that are not in the verse or the supplied dictionary entries.',
     'When you are unsure of a word, prefer the meaning given in the supplied dictionary entries over your own guess.',
+    'If you genuinely cannot translate the verse, output a single short sentence saying so — do not output your reasoning or analysis.',
+    '',
+    'STRICT OUTPUT FORMAT — read carefully:',
+    '- Output ONLY the final translation. Nothing else.',
+    '- Do not output any analysis, parsing, reasoning, line-by-line breakdown, transliteration, or commentary.',
+    '- Do not start with phrases like "We need to", "Let me parse", "Let\'s try", "First, I will", "The verse seems to", or similar meta-talk.',
+    '- Do not output the original verse, the prompt instructions, headings, bullet points, or numbered lists.',
+    '- Do not wrap the translation in quotation marks.',
+    '- Do not append explanations after the translation.',
     '',
   ];
 
   if (target === 'modern_tamil') {
-    systemLines.push('Output a single paragraph of grammatical, contemporary written Tamil.');
-    systemLines.push('Do not include the verse, the prompt, headings, or any explanation. Just the paraphrase.');
+    systemLines.push('Output exactly: a single paragraph of grammatical, contemporary written Tamil.');
   } else {
-    systemLines.push('Output a single paragraph of clear, grammatical English.');
-    systemLines.push('Do not include the verse, the prompt, headings, or any explanation. Just the translation.');
+    systemLines.push('Output exactly: a single paragraph of clear, grammatical English.');
   }
 
   const userLines = [];
@@ -520,7 +542,7 @@ function buildTranslatePrompt(opts) {
     userLines.push('');
   }
 
-  userLines.push('TASK: Produce the ' + targetLabel + ' now.');
+  userLines.push('TASK: Produce the ' + targetLabel + ' now. Output only the translation itself — no preamble, no analysis, no commentary.');
 
   return [
     { role: 'system', content: systemLines.join('\n') },

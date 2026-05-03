@@ -415,7 +415,8 @@ const state = {
   // in the background on verse load. Passed as context to /translate.
   // {word: ['definition 1', 'definition 2', ...]}
   verseWordDefs: {},
-  verseWordDefsForId: null,     // verse_id this cache belongs to
+  verseWordDefsForId: null,        // verse_id this cache belongs to
+  verseWordDefsPromise: null,      // resolves when the background prefetch is done
 };
 
 // ─── localStorage helpers ─────────────────────────────────────────────────
@@ -557,7 +558,22 @@ async function prefetchVerseWordDefs(verse) {
 async function requestTranslation(target) {
   const verse = state.verses[state.index];
   if (!verse) return { ok: false, reason: 'no_verse' };
-  return postAction({
+  // Wait for the background Wiktionary prefetch to finish before posting.
+  // Otherwise we might send an empty word_definitions section just because
+  // the user clicked Suggest faster than Wiktionary returned (~1.5s).
+  if (state.verseWordDefsPromise) {
+    try { await state.verseWordDefsPromise; } catch { /* best-effort */ }
+  }
+  const wordDefsCount = Object.keys(state.verseWordDefs || {}).length;
+  console.log('[/translate] sending request', {
+    target,
+    verse_id: verse.verse_id,
+    word_defs_count: wordDefsCount,
+    has_modern_tamil: !!state.annotation?.modern_tamil,
+    has_english: !!state.annotation?.english,
+    classical_chars: (verse.classical_tamil || '').length,
+  });
+  const result = await postAction({
     action: 'translate',
     target: target,
     classical_tamil: verse.classical_tamil || '',
@@ -568,6 +584,10 @@ async function requestTranslation(target) {
     source_text: verse.source_text || null,
     session_id: state.sessionId,
   });
+  if (result.ok && result.data && result.data.context_used) {
+    console.log('[/translate] backend confirmed context used:', result.data.context_used);
+  }
+  return result;
 }
 
 /**
@@ -1348,9 +1368,11 @@ function renderVerse() {
 
   // Pre-fetch Wiktionary definitions for words in this verse, in the
   // background. Used as context by the "Suggest translation" feature
-  // (ADR 0007). Fire-and-forget; the button handles cold-cache gracefully
-  // by passing whatever's been collected when the click happens.
-  prefetchVerseWordDefs(verse).catch(() => { /* best-effort */ });
+  // (ADR 0007). The promise is stashed on state so requestTranslation can
+  // await it before posting — avoids a race where the user clicks Suggest
+  // before the parallel Wiktionary lookups finish, and the prompt gets an
+  // empty dictionary section.
+  state.verseWordDefsPromise = prefetchVerseWordDefs(verse).catch(() => { /* best-effort */ });
 
   // ─ Translation
   container.appendChild(el('div', { class: 'section-h' },

@@ -120,34 +120,50 @@ jobs:
         if: steps.check.outputs.configured == 'true'
         run: clasp push --force
 
-      - name: Create a new versioned snapshot
-        # clasp version prints something like "Created version 12." We grep
-        # the trailing integer out and pass it to redeploy. Doing this
-        # explicitly (rather than letting redeploy auto-create) is what keeps
-        # the deployment ID stable.
-        id: version
-        if: steps.check.outputs.configured == 'true'
-        run: |
-          set -euo pipefail
-          OUTPUT=$(clasp version "ci ${GITHUB_SHA::7}")
-          echo "$OUTPUT"
-          VERSION=$(echo "$OUTPUT" | grep -oE '[0-9]+' | tail -n 1)
-          if [ -z "$VERSION" ]; then
-            echo "::error::Could not parse version number from clasp output"
-            exit 1
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Created version $VERSION"
+      # NOTE: clasp redeploy is currently DISABLED because it empirically
+      # resets the deployment's "Who has access" setting back to a non-Anyone
+      # default on every run, breaking the public /exec endpoint. Until we
+      # replace it with direct Apps Script REST API calls that can preserve
+      # webApp access settings, code pushes via CI go to Apps Script (the
+      # `clasp push` step above) but don't auto-publish to /exec. To publish
+      # a new version, the operator opens Apps Script editor → Manage
+      # deployments → edit → Version: New version → Deploy. The "Who has
+      # access" setting persists across UI-driven redeploys.
+      #
+      # Tracking: see CHANGELOG note 2026-05-03 and DEPLOY.md troubleshooting
+      # section. Long-term fix is to replace these steps with curl calls
+      # against script.googleapis.com that explicitly set entryPoints[0]
+      # .webAppConfig.access = "ANYONE" in the request body.
+      #
+      # - name: Create a new versioned snapshot
+      #   id: version
+      #   if: steps.check.outputs.configured == 'true'
+      #   run: |
+      #     set -euo pipefail
+      #     OUTPUT=$(clasp version "ci ${GITHUB_SHA::7}")
+      #     echo "$OUTPUT"
+      #     VERSION=$(echo "$OUTPUT" | grep -oE '[0-9]+' | tail -n 1)
+      #     if [ -z "$VERSION" ]; then
+      #       echo "::error::Could not parse version number from clasp output"
+      #       exit 1
+      #     fi
+      #     echo "version=$VERSION" >> $GITHUB_OUTPUT
+      #     echo "Created version $VERSION"
+      #
+      # - name: Redeploy (update the existing deployment, keep the URL)
+      #   if: steps.check.outputs.configured == 'true'
+      #   env:
+      #     DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
+      #     VERSION: ${{ steps.version.outputs.version }}
+      #   run: |
+      #     clasp redeploy "$DEPLOYMENT_ID" \
+      #       -V "$VERSION" \
+      #       -d "ci $(date -u +%Y-%m-%dT%H:%MZ) ${GITHUB_SHA::7}"
 
-      - name: Redeploy (update the existing deployment, keep the URL)
+      - name: Notify operator that manual UI redeploy is required
         if: steps.check.outputs.configured == 'true'
-        env:
-          DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
-          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          clasp redeploy "$DEPLOYMENT_ID" \
-            -V "$VERSION" \
-            -d "ci $(date -u +%Y-%m-%dT%H:%MZ) ${GITHUB_SHA::7}"
+          echo "::notice::Code pushed to Apps Script successfully. Auto-redeploy is currently DISABLED (it was resetting webApp access on every run). To publish to /exec: Apps Script editor → Manage deployments → edit → Version: New version → Deploy. See CHANGELOG and DEPLOY.md for the long-term fix tracking."
 
       - name: Probe live deployment access (must serve "Anyone")
         # Apps Script's `clasp redeploy` empirically resets a deployment's
